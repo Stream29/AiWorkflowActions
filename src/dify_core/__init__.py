@@ -1,1 +1,1 @@
-# Dify core components for NextNodePrediction
+# Dify core components for AiWorkflowActions

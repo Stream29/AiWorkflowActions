@@ -7,15 +7,15 @@ from typing import Dict, Any, List, Tuple, Optional
 from pydantic import ValidationError
 
 # Import simplified Dify models
-from src.dify_core.workflow.nodes.enums import NodeType
-from src.dify_core.workflow.nodes.start.entities import StartNodeData
-from src.dify_core.workflow.nodes.llm.entities import LLMNodeData
-from src.dify_core.workflow.nodes.code.entities import CodeNodeData
-from src.dify_core.workflow.nodes.template_transform.entities import TemplateTransformNodeData
-from src.dify_core.workflow.nodes.if_else.entities import IfElseNodeData
-from src.dify_core.workflow.nodes.http_request.entities import HttpRequestNodeData
-from src.dify_core.workflow.nodes.end.entities import EndNodeData
-from src.dify_core.workflow.graph_engine.entities.graph import Graph
+from dify_core.workflow.nodes.enums import NodeType
+from dify_core.workflow.nodes.start.entities import StartNodeData
+from dify_core.workflow.nodes.llm.entities import LLMNodeData
+from dify_core.workflow.nodes.code.entities import CodeNodeData
+from dify_core.workflow.nodes.template_transform.entities import TemplateTransformNodeData
+from dify_core.workflow.nodes.if_else.entities import IfElseNodeData
+from dify_core.workflow.nodes.http_request.entities import HttpRequestNodeData
+from dify_core.workflow.nodes.end.entities import EndNodeData
+from dify_core.workflow.graph_engine.entities.graph import Graph
 
 
 class Validator:

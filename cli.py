@@ -1,5 +1,5 @@
 """
-Command-line interface for NextNodePrediction
+Command-line interface for AiWorkflowActions
 Pure UI layer that delegates to core modules
 """
 
@@ -9,7 +9,7 @@ import yaml
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from . import WorkflowCore, Validator, ContextBuilder, NodeGenerator
+from next_node_prediction import WorkflowCore, ContextBuilder, Validator, NodeGenerator
 
 
 class CLI:
@@ -285,7 +285,7 @@ class CLI:
 
     def interactive_mode(self):
         """Run interactive command loop"""
-        print("\n=== NextNodePrediction CLI ===")
+        print("\n=== AiWorkflowActions CLI ===")
         print("Type 'help' for commands, 'exit' to quit\n")
 
         while True:
@@ -372,7 +372,7 @@ Traditional Examples:
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(
-        description='NextNodePrediction - AI-powered workflow node generation'
+        description='AiWorkflowActions - AI-powered workflow node generation'
     )
 
     parser.add_argument('file', nargs='?', help='Workflow file to load')

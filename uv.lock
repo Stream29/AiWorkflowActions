@@ -145,17 +145,12 @@ wheels = [
 [[package]]
 name = "next-node-prediction"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "ty" },
-]
-
-[package.optional-dependencies]
-dev = [
     { name = "ty" },
 ]
 
@@ -166,9 +161,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = "==1.0.1" },
     { name = "pyyaml", specifier = "~=6.0.1" },
     { name = "ty", specifier = ">=0.0.1a20" },
-    { name = "ty", marker = "extra == 'dev'", specifier = "~=0.0.1a19" },
 ]
-provides-extras = ["dev"]
 
 [[package]]
 name = "pydantic"
