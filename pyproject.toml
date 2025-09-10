@@ -1,0 +1,11 @@
+[project]
+name = "next-node-prediction"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=0.40.0",
+    "python-dotenv==1.0.1",
+    "pydantic~=2.11.4",
+    "pyyaml~=6.0.1",
+    "ty>=0.0.1a20",
+]

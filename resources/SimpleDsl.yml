@@ -1,0 +1,142 @@
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: workflow
+  name: WorkflowPlaygrounf
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai:0.0.30@1f5ecdef108418a467e54da2dcf5de2cf22b47632abc8633194ac9fb96317ede
+kind: app
+version: 0.4.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        image_file_size_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1757402359892-source-1757405394887-target
+      source: '1757402359892'
+      sourceHandle: source
+      target: '1757405394887'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: ''
+        selected: false
+        title: Start
+        type: start
+        variables:
+        - label: 需要翻译的文字
+          max_length: 1000
+          options: []
+          required: true
+          type: paragraph
+          variable: raw
+      height: 89
+      id: '1757402359892'
+      position:
+        x: -9.427277424113413
+        y: 448.7288223161438
+      positionAbsolute:
+        x: -9.427277424113413
+        y: 448.7288223161438
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: ''
+        model:
+          completion_params:
+            temperature: 0.7
+          mode: chat
+          name: chatgpt-4o-latest
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: 15fcbca8-a90e-4cce-ac43-768bab9cc356
+          role: system
+          text: 你是一个翻译器
+        - role: user
+          text: '请翻译：
+
+            {{#1757402359892.raw#}}'
+        selected: true
+        title: LLM
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 89
+      id: '1757405394887'
+      position:
+        x: 294.5727225758866
+        y: 448.7288223161438
+      positionAbsolute:
+        x: 294.5727225758866
+        y: 448.7288223161438
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: 59.488640181421715
+      y: -23.808681123610313
+      zoom: 0.6597539553864472
