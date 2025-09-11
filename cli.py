@@ -9,7 +9,7 @@ import yaml
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-from next_node_prediction import WorkflowCore, ContextBuilder, Validator, NodeGenerator
+from ai_workflow_action import WorkflowCore, ContextBuilder, Validator, NodeGenerator
 
 
 class CLI:
