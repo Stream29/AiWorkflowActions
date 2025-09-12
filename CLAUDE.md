@@ -1,6 +1,6 @@
 # AiWorkflowActions 项目信息（CLAUDE 指南）
 
-最后更新：2025-09-12 16:40
+最后更新：2025-09-12 17:38
 
 ## 项目简介
 AiWorkflowActions 是一个面向 Dify 工作流（Workflow DSL）的工具集：
@@ -32,14 +32,14 @@ AiWorkflowActions 是一个面向 Dify 工作流（Workflow DSL）的工具集�
 常见命令均在 `cli.py` 中实现，入口类位于 `src/ai_workflow_action`。
 
 - 加载并查看工作流信息：
-  - `python cli.py resources/Awesome-Dify-Workflow/DSL/AgentFlow.yml`
+  - `uv run cli.py resources/Awesome-Dify-Workflow/DSL/AgentFlow.yml`
 - 校验当前已加载的工作流：
-  - `python cli.py resources/.../YourDsl.yml --validate`
+  - `uv run cli.py resources/.../YourDsl.yml --validate`
 - 批量校验资源库并生成报告：
-  - `python cli.py --validate-resources`
+  - `uv run cli.py --validate-resources`
   - 成功与失败均会在控制台输出摘要；若存在失败，将在项目根目录生成 `DIFY_DSL_VALIDATION_REPORT.md`。
 - 交互式模式：
-  - `python cli.py` 后输入 `help` 查看可用命令（如：load/save/validate/nodes/auto-next 等）。
+  - `uv run cli.py` 后输入 `help` 查看可用命令（如：load/save/validate/nodes/auto-next 等）。
 
 ## 与 Dify DSL 相关的文件
 - 新版 DSL 总入口模型：`src/dsl_model/dsl.py`（`DifyWorkflowDSL`）。
@@ -56,8 +56,8 @@ AiWorkflowActions 是一个面向 Dify 工作流（Workflow DSL）的工具集�
 ## 项目结构（节选）
 - `src/ai_workflow_action`：工作流读写、校验、上下文构建、节点生成等核心逻辑（非 LLM 能力本体）。
 - `src/dsl_model`：Pydantic v2 的 DSL 数据模型（当前权威解析/校验来源）。
-- `src/dify_core`：历史保留代码，不再作为默认解析路径。
-- `resources/Awesome-Dify-Workflow/DSL`：示例 DSL 集合。
+- `resources/Awesome-Dify-Workflow/DSL`：示例 DSL 库。`
+- `resources/dify`：dify开源仓库，包括前端和后端
 
 ## 开发提示
 - 若需扩展某类节点的数据结构，请在 `src/dsl_model/nodes.py` 中新增/调整对应的 `...NodeData` 并确保其包含 `type: Literal[...]`，以便经由 discriminator 正确分发。
