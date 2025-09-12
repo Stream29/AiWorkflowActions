@@ -391,6 +391,30 @@ class ListOperatorNodeData(BaseNodeData):
         return v
 
 
+class NoteNodeData(BaseModel):
+    """Note node - annotation/comment node for workflow documentation"""
+    type: Literal[""] = Field(default="")
+    title: str = Field(default="")
+    theme: Literal["blue", "cyan", "green", "yellow", "pink", "violet"] = "blue"
+    text: Optional[str] = None
+    author: str = Field(default="")
+    showAuthor: bool = Field(default=False)
+    width: int = Field(default=240)
+    height: int = Field(default=88)
+    
+    # Note nodes can have complex rich text data structure
+    data: Optional[Dict[str, Any]] = None
+    
+    model_config = ConfigDict(extra="allow")
+    
+    @field_validator('title', mode='before')
+    @classmethod
+    def normalize_title(cls, v):
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return "Note"
+        return str(v).strip()
+
+
 
 
 
@@ -418,6 +442,7 @@ NodeData = Annotated[
         QuestionClassifierNodeData,
         DocumentExtractorNodeData,
         ListOperatorNodeData,
+        NoteNodeData,
     ],
     Field(discriminator='type')
 ]

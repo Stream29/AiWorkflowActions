@@ -78,13 +78,6 @@ class PromptMessage(BaseModel):
     text: str = Field(default="")
     id: Optional[str] = None
 
-    @field_validator('text')
-    @classmethod
-    def validate_text(cls, v):
-        if not v.strip():
-            raise ValueError('prompt message text cannot be empty')
-        return v
-
 
 class PromptConfig(BaseModel):
     """Prompt configuration for Jinja2 variables"""
@@ -105,7 +98,6 @@ class LLMNodeChatModelMessage(PromptMessage):
 
 class LLMNodeCompletionModelPromptTemplate(BaseModel):
     """Completion model prompt template for LLM nodes"""
-    text: str = ""
     jinja2_text: Optional[str] = None
 
 
