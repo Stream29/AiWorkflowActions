@@ -82,8 +82,26 @@ class Graph(BaseModel):
                 raise ValueError(f'Edge target "{edge.target}" references non-existent node')
 
         # Ensure there's exactly one start node
-        start_nodes = [node for node in self.nodes if getattr(node.data, 'type', None) == NodeType.START]
-        if len(start_nodes) != 1:
+        from .nodes import StartNodeData
+        # Prefer semantic detection by model type or discriminant field
+        start_node_ids = set()
+        for node in self.nodes:
+            try:
+                if isinstance(node.data, StartNodeData):
+                    start_node_ids.add(node.id)
+                    continue
+                node_type_val = getattr(node.data, "type", None)
+                if node_type_val == NodeType.START or node_type_val == NodeType.START.value:
+                    start_node_ids.add(node.id)
+            except Exception:
+                # Be resilient to unexpected shapes
+                pass
+        # Fallback: infer from edges metadata if none found
+        if not start_node_ids:
+            for edge in self.edges:
+                if edge.data and edge.data.sourceType == NodeType.START.value:
+                    start_node_ids.add(edge.source)
+        if len(start_node_ids) != 1:
             raise ValueError('Graph must have exactly one start node')
 
         return self

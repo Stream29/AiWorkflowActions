@@ -7,22 +7,26 @@ class NodeType(StrEnum):
     END = "end"
     ANSWER = "answer"
     LLM = "llm"
-    AGENT = "agent"
-    CODE = "code"
+    KNOWLEDGE_RETRIEVAL = "knowledge-retrieval"
     IF_ELSE = "if-else"
+    CODE = "code"
     TEMPLATE_TRANSFORM = "template-transform"
-    PARAMETER_EXTRACTOR = "parameter-extractor"
-    VARIABLE_ASSIGNER = "assigner"
-    VARIABLE_AGGREGATOR = "variable-aggregator"
-    ITERATION = "iteration"
-    ITERATION_START = "iteration-start"
+    QUESTION_CLASSIFIER = "question-classifier"
     HTTP_REQUEST = "http-request"
     TOOL = "tool"
-    KNOWLEDGE_RETRIEVAL = "knowledge-retrieval"
-    QUESTION_CLASSIFIER = "question-classifier"
+    VARIABLE_AGGREGATOR = "variable-aggregator"
+    LEGACY_VARIABLE_AGGREGATOR = "variable-assigner"  # For backward compatibility
+    LOOP = "loop"
+    LOOP_START = "loop-start"
+    LOOP_END = "loop-end"
+    ITERATION = "iteration"
+    ITERATION_START = "iteration-start"  # Fake start node for iteration
+    PARAMETER_EXTRACTOR = "parameter-extractor"
+    VARIABLE_ASSIGNER = "assigner"
     DOCUMENT_EXTRACTOR = "document-extractor"
     LIST_OPERATOR = "list-operator"
-    CUSTOM = "custom"
+    AGENT = "agent"
+    # CUSTOM = "custom"  # Deprecated - not supported in dify/api
 
 
 class VariableType(StrEnum):
@@ -72,3 +76,14 @@ class SegmentType(StrEnum):
     ARRAY_OBJECT = "array[object]"
     ARRAY_BOOLEAN = "array[boolean]"
     ARRAY_FILE = "array[file]"
+
+
+class DefaultValueType(StrEnum):
+    """Default value types for error handling"""
+    STRING = "string"
+    NUMBER = "number"
+    OBJECT = "object"
+    ARRAY_NUMBER = "array[number]"
+    ARRAY_STRING = "array[string]"
+    ARRAY_OBJECT = "array[object]"
+    ARRAY_FILES = "array[file]"

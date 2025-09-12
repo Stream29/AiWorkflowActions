@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional, Sequence, Union
+from typing import Any, Dict, List, Literal, Optional, Sequence, Union, Annotated
 
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
@@ -6,7 +6,10 @@ from .enums import NodeType, SegmentType, CodeLanguage
 from .core import (
     BaseNodeData,
     ContextConfig,
+    LLMNodeChatModelMessage,
+    LLMNodeCompletionModelPromptTemplate,
     ModelConfig,
+    PromptConfig,
     PromptMessage,
     Variable,
     VariableSelector,
@@ -16,18 +19,18 @@ from .core import (
 
 class StartNodeData(BaseNodeData):
     """Start node - workflow entry point"""
-    type: Literal[NodeType.START] = NodeType.START
+    type: Literal["start"] = Field(default="start")
     variables: List[Variable] = Field(default_factory=list)
 
 
 class EndNodeData(BaseNodeData):
     """End node - workflow termination"""
-    type: Literal[NodeType.END] = NodeType.END
+    type: Literal["end"] = Field(default="end")
 
 
 class AnswerNodeData(BaseNodeData):
     """Answer node - provides response in chat mode"""
-    type: Literal[NodeType.ANSWER] = NodeType.ANSWER
+    type: Literal["answer"] = Field(default="answer")
     answer: str = Field(description="Answer template with variable substitution")
 
     @field_validator('answer')
@@ -40,35 +43,33 @@ class AnswerNodeData(BaseNodeData):
 
 class LLMNodeData(BaseNodeData):
     """LLM node - AI model interaction"""
-    type: Literal[NodeType.LLM] = NodeType.LLM
+    type: Literal["llm"] = Field(default="llm")
     model: ModelConfig
-    prompt_template: List[PromptMessage]
-    context: Optional[ContextConfig] = None
-    vision: Optional[VisionConfig] = None
+    prompt_template: Union[Sequence[LLMNodeChatModelMessage], LLMNodeCompletionModelPromptTemplate]
+    prompt_config: PromptConfig = Field(default_factory=PromptConfig)
     memory: Optional[Dict[str, Any]] = None
+    context: ContextConfig
+    vision: VisionConfig = Field(default_factory=VisionConfig)
     structured_output: Optional[Dict[str, Any]] = None
-    structured_output_enabled: bool = Field(default=False)
+    structured_output_switch_on: bool = Field(default=False, alias="structured_output_enabled")
+    reasoning_format: Literal["separated", "tagged"] = Field(default="tagged")
 
-    @field_validator('prompt_template')
+    @field_validator("prompt_config", mode="before")
     @classmethod
-    def validate_prompt_template(cls, v):
-        if not v:
-            raise ValueError('prompt_template cannot be empty')
-        # Ensure at least one user message
-        has_user = any(msg.role == "user" for msg in v)
-        if not has_user:
-            raise ValueError('prompt_template must contain at least one user message')
+    def convert_none_prompt_config(cls, v: Any):
+        if v is None:
+            return PromptConfig()
         return v
 
-    @model_validator(mode='after')
-    def validate_structured_output(self):
-        if self.structured_output_enabled and not self.structured_output:
-            raise ValueError('structured_output is required when structured_output_enabled is True')
-        return self
+    @property
+    def structured_output_enabled(self) -> bool:
+        """Backward compatibility property"""
+        return self.structured_output_switch_on and self.structured_output is not None
 
 
 class CodeNodeData(BaseNodeData):
     """Code node - execute Python/JavaScript code"""
+    type: Literal["code"] = Field(default="code")
 
     class Output(BaseModel):
         """Code node output definition"""
@@ -89,40 +90,27 @@ class CodeNodeData(BaseNodeData):
 
     class Dependency(BaseModel):
         """Code node dependency"""
-        name: str = Field(min_length=1)
-        version: str = Field(min_length=1)
+        name: str
+        version: str
 
-    type: Literal[NodeType.CODE] = NodeType.CODE
-    code_language: CodeLanguage
-    code: str = Field(min_length=1)
-    variables: List[VariableSelector] = Field(default_factory=list)
+    # Removed type field to match dify/api
+    variables: List[VariableSelector]
+    code_language: Literal[CodeLanguage.PYTHON3, CodeLanguage.JAVASCRIPT]
+    code: str
     outputs: Dict[str, Output]
-    dependencies: List[Dependency] = Field(default_factory=list)
-
-    @field_validator('code')
-    @classmethod
-    def validate_code(cls, v):
-        if not v.strip():
-            raise ValueError('code cannot be empty')
-        return v
-
-    @field_validator('outputs')
-    @classmethod
-    def validate_outputs(cls, v):
-        if not v:
-            raise ValueError('at least one output must be defined')
-        return v
+    dependencies: Optional[List[Dependency]] = None
 
 
 class HTTPRequestNodeData(BaseNodeData):
     """HTTP request node"""
+    type: Literal["http-request"] = Field(default="http-request")
 
     class Authorization(BaseModel):
         """HTTP authorization configuration"""
         type: Literal["no-auth", "api-key", "bearer-token"] = "no-auth"
         config: Optional[Dict[str, str]] = None
 
-    type: Literal[NodeType.HTTP_REQUEST] = NodeType.HTTP_REQUEST
+    # Removed type field to match dify/api
     method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"] = "GET"
     url: str = Field(min_length=1, description="Request URL")
     headers: Dict[str, str] = Field(default_factory=dict)
@@ -141,6 +129,7 @@ class HTTPRequestNodeData(BaseNodeData):
 
 class ToolNodeData(BaseNodeData):
     """Tool node - external tool integration"""
+    type: Literal["tool"] = Field(default="tool")
 
     class ParameterSchema(BaseModel):
         """Tool parameter schema"""
@@ -149,7 +138,7 @@ class ToolNodeData(BaseNodeData):
         required: bool = Field(default=False)
         description: str = Field(default="")
 
-    type: Literal[NodeType.TOOL] = NodeType.TOOL
+    # Removed type field to match dify/api
     provider_id: str = Field(min_length=1)
     provider_name: str = Field(min_length=1)
     tool_name: str = Field(min_length=1)
@@ -160,6 +149,7 @@ class ToolNodeData(BaseNodeData):
 
 class IfElseNodeData(BaseNodeData):
     """If-else node - conditional branching"""
+    type: Literal["if-else"] = Field(default="if-else")
 
     class Condition(BaseModel):
         """Single condition"""
@@ -173,7 +163,7 @@ class IfElseNodeData(BaseNodeData):
         conditions: List["IfElseNodeData.Condition"] = Field(min_items=1)
         logical_operator: Literal["and", "or"] = "and"
 
-    type: Literal[NodeType.IF_ELSE] = NodeType.IF_ELSE
+    # Removed type field to match dify/api
     cases: List[Case] = Field(min_items=1)
 
     @field_validator('cases')
@@ -187,7 +177,7 @@ class IfElseNodeData(BaseNodeData):
 
 class TemplateTransformNodeData(BaseNodeData):
     """Template transform node - text template processing"""
-    type: Literal[NodeType.TEMPLATE_TRANSFORM] = NodeType.TEMPLATE_TRANSFORM
+    type: Literal["template-transform"] = Field(default="template-transform")
     template: str = Field(min_length=1, description="Jinja2 template")
 
     @field_validator('template')
@@ -200,7 +190,7 @@ class TemplateTransformNodeData(BaseNodeData):
 
 class VariableAssignerNodeData(BaseNodeData):
     """Variable assigner node"""
-    type: Literal[NodeType.VARIABLE_ASSIGNER] = NodeType.VARIABLE_ASSIGNER
+    type: Literal["assigner", "variable-assigner"] = Field(default="assigner")
     assigned_variable_selector: List[str] = Field(min_items=1)
     input_variable_selector: List[str] = Field(min_items=1)
     write_mode: Literal["over-write", "append", "clear"] = "over-write"
@@ -208,7 +198,7 @@ class VariableAssignerNodeData(BaseNodeData):
 
 class KnowledgeRetrievalNodeData(BaseNodeData):
     """Knowledge retrieval node"""
-    type: Literal[NodeType.KNOWLEDGE_RETRIEVAL] = NodeType.KNOWLEDGE_RETRIEVAL
+    type: Literal["knowledge-retrieval"] = Field(default="knowledge-retrieval")
     dataset_ids: List[str] = Field(min_items=1)
     query_variable_selector: List[str] = Field(min_items=1)
     retrieval_mode: Literal["single", "multiple"] = "single"
@@ -218,7 +208,7 @@ class KnowledgeRetrievalNodeData(BaseNodeData):
 
 class AgentNodeData(BaseNodeData):
     """Agent node - intelligent agent interaction"""
-    type: Literal[NodeType.AGENT] = NodeType.AGENT
+    type: Literal["agent"] = Field(default="agent")
     agent_strategy: str = Field(min_length=1)
     agent_parameters: Dict[str, Any] = Field(default_factory=dict)
     output_schema: Optional[Dict[str, Any]] = None
@@ -226,7 +216,7 @@ class AgentNodeData(BaseNodeData):
 
 class IterationNodeData(BaseNodeData):
     """Iteration node - loop processing"""
-    type: Literal[NodeType.ITERATION] = NodeType.ITERATION
+    type: Literal["iteration"] = Field(default="iteration")
     iterator_selector: List[str] = Field(min_items=1)
     output_selector: List[str] = Field(min_items=1)
     output_type: SegmentType = SegmentType.ARRAY_OBJECT
@@ -234,14 +224,14 @@ class IterationNodeData(BaseNodeData):
 
 class ParameterExtractorNodeData(BaseNodeData):
     """Parameter extractor node"""
-    type: Literal[NodeType.PARAMETER_EXTRACTOR] = NodeType.PARAMETER_EXTRACTOR
+    type: Literal["parameter-extractor"] = Field(default="parameter-extractor")
     query: str = Field(min_length=1)
     parameters: List[Dict[str, Any]] = Field(min_items=1)
 
 
 class QuestionClassifierNodeData(BaseNodeData):
     """Question classifier node"""
-    type: Literal[NodeType.QUESTION_CLASSIFIER] = NodeType.QUESTION_CLASSIFIER
+    type: Literal["question-classifier"] = Field(default="question-classifier")
     query_variable_selector: List[str] = Field(min_items=1)
     classes: List[Dict[str, Any]] = Field(min_items=2)
 
@@ -256,22 +246,24 @@ class FlexibleNodeData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-# Union of all node data types - prioritize most specific types first
-NodeData = Union[
-    StartNodeData,
-    EndNodeData,
-    AnswerNodeData,
-    LLMNodeData,
-    CodeNodeData,
-    HTTPRequestNodeData,
-    ToolNodeData,
-    IfElseNodeData,
-    TemplateTransformNodeData,
-    VariableAssignerNodeData,
-    KnowledgeRetrievalNodeData,
-    AgentNodeData,
-    IterationNodeData,
-    ParameterExtractorNodeData,
-    QuestionClassifierNodeData,
-    FlexibleNodeData,  # Fallback for unknown types
+# Discriminated union of all node data types by the 'type' field
+NodeData = Annotated[
+    Union[
+        StartNodeData,
+        EndNodeData,
+        AnswerNodeData,
+        LLMNodeData,
+        CodeNodeData,
+        HTTPRequestNodeData,
+        ToolNodeData,
+        IfElseNodeData,
+        TemplateTransformNodeData,
+        VariableAssignerNodeData,
+        KnowledgeRetrievalNodeData,
+        AgentNodeData,
+        IterationNodeData,
+        ParameterExtractorNodeData,
+        QuestionClassifierNodeData,
+    ],
+    Field(discriminator='type')
 ]

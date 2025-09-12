@@ -7,15 +7,17 @@ from typing import Dict, Any, List, Tuple, Optional
 from pydantic import ValidationError
 
 # Import simplified Dify models
-from dify_core.workflow.nodes.enums import NodeType
-from dify_core.workflow.nodes.start.entities import StartNodeData
-from dify_core.workflow.nodes.llm.entities import LLMNodeData
-from dify_core.workflow.nodes.code.entities import CodeNodeData
-from dify_core.workflow.nodes.template_transform.entities import TemplateTransformNodeData
-from dify_core.workflow.nodes.if_else.entities import IfElseNodeData
-from dify_core.workflow.nodes.http_request.entities import HttpRequestNodeData
-from dify_core.workflow.nodes.end.entities import EndNodeData
-from dify_core.workflow.graph_engine.entities.graph import Graph
+from dsl_model.enums import NodeType
+from dsl_model.nodes import (
+    StartNodeData,
+    LLMNodeData,
+    CodeNodeData,
+    TemplateTransformNodeData,
+    IfElseNodeData,
+    HTTPRequestNodeData,
+    EndNodeData,
+)
+from dsl_model.dsl import DifyWorkflowDSL
 
 
 class Validator:
@@ -29,7 +31,7 @@ class Validator:
             NodeType.CODE.value: CodeNodeData,
             NodeType.TEMPLATE_TRANSFORM.value: TemplateTransformNodeData,
             NodeType.IF_ELSE.value: IfElseNodeData,
-            NodeType.HTTP_REQUEST.value: HttpRequestNodeData,
+            NodeType.HTTP_REQUEST.value: HTTPRequestNodeData,
             NodeType.END.value: EndNodeData,
         }
     
@@ -106,16 +108,17 @@ class Validator:
                 results['node_errors'][node_id] = errors
                 results['is_valid'] = False
         
-        # Validate graph structure
+        # Validate by parsing full DSL using new Pydantic models
         try:
-            graph_config = workflow_data.get('workflow', {}).get('graph', {})
-            graph = Graph.init(graph_config=graph_config)
-            
-            if not graph.root_node_id:
-                results['graph_errors'].append("No root node found in graph")
-                results['is_valid'] = False
+            DifyWorkflowDSL(**workflow_data)
+        except ValidationError as e:
+            for error in e.errors():
+                field = ' -> '.join(str(loc) for loc in error['loc'])
+                msg = error['msg']
+                results['graph_errors'].append(f"{field}: {msg}")
+            results['is_valid'] = False
         except Exception as e:
-            results['graph_errors'].append(f"Graph validation error: {str(e)}")
+            results['graph_errors'].append(f"DSL validation error: {str(e)}")
             results['is_valid'] = False
         
         return results['is_valid'], results

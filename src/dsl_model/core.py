@@ -1,9 +1,10 @@
+import json
 from abc import ABC
-from typing import Any, Dict, List, Literal, Optional, Sequence
+from typing import Any, Dict, List, Literal, Optional, Sequence, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
-from .enums import VariableType, LLMMode
+from .enums import VariableType, LLMMode, ErrorStrategy, DefaultValueType
 
 
 class VariableSelector(BaseModel):
@@ -85,6 +86,29 @@ class PromptMessage(BaseModel):
         return v
 
 
+class PromptConfig(BaseModel):
+    """Prompt configuration for Jinja2 variables"""
+    jinja2_variables: Sequence[VariableSelector] = Field(default_factory=list)
+
+    @field_validator("jinja2_variables", mode="before")
+    @classmethod
+    def convert_none_jinja2_variables(cls, v: Any):
+        if v is None:
+            return []
+        return v
+
+
+class LLMNodeChatModelMessage(PromptMessage):
+    """Enhanced chat model message for LLM nodes"""
+    jinja2_text: Optional[str] = None
+
+
+class LLMNodeCompletionModelPromptTemplate(BaseModel):
+    """Completion model prompt template for LLM nodes"""
+    text: str = ""
+    jinja2_text: Optional[str] = None
+
+
 class ContextConfig(BaseModel):
     """Context configuration for LLM nodes"""
     enabled: bool = Field(default=False)
@@ -97,30 +121,140 @@ class ContextConfig(BaseModel):
         return self
 
 
-class VisionConfig(BaseModel):
-    """Vision configuration for LLM nodes"""
-    enabled: bool = Field(default=False)
+class VisionConfigOptions(BaseModel):
+    """Vision configuration options"""
     variable_selector: Sequence[str] = Field(default_factory=lambda: ["sys", "files"])
     detail: Literal["low", "high"] = Field(default="high")
 
-    @model_validator(mode='after')
-    def validate_vision_config(self):
-        if self.enabled and not self.variable_selector:
-            raise ValueError('variable_selector is required when vision is enabled')
+
+class VisionConfig(BaseModel):
+    """Vision configuration for LLM nodes"""
+    enabled: bool = Field(default=False)
+    configs: VisionConfigOptions = Field(default_factory=VisionConfigOptions)
+
+    @field_validator("configs", mode="before")
+    @classmethod
+    def convert_none_configs(cls, v: Any):
+        if v is None:
+            return VisionConfigOptions()
+        return v
+
+
+NumberType = Union[int, float]
+
+
+class DefaultValue(BaseModel):
+    """Default value configuration for error handling"""
+    value: Any = None
+    type: DefaultValueType
+    key: str
+
+    @staticmethod
+    def _parse_json(value: str):
+        """Unified JSON parsing handler"""
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            raise ValueError(f"Invalid JSON format for value: {value}")
+
+    @staticmethod
+    def _validate_array(value: Any, element_type: type) -> bool:
+        """Unified array type validation"""
+        return isinstance(value, list) and all(isinstance(x, element_type) for x in value)
+
+    @staticmethod
+    def _convert_number(value: str) -> float:
+        """Unified number conversion handler"""
+        try:
+            return float(value)
+        except ValueError:
+            raise ValueError(f"Cannot convert to number: {value}")
+
+    @model_validator(mode="after")
+    def validate_value_type(self) -> "DefaultValue":
+        if self.type is None:
+            raise ValueError("type field is required")
+
+        # Type validation configuration
+        type_validators = {
+            DefaultValueType.STRING: {
+                "type": str,
+                "converter": lambda x: x,
+            },
+            DefaultValueType.NUMBER: {
+                "type": NumberType,
+                "converter": self._convert_number,
+            },
+            DefaultValueType.OBJECT: {
+                "type": dict,
+                "converter": self._parse_json,
+            },
+            DefaultValueType.ARRAY_NUMBER: {
+                "type": list,
+                "element_type": NumberType,
+                "converter": self._parse_json,
+            },
+            DefaultValueType.ARRAY_STRING: {
+                "type": list,
+                "element_type": str,
+                "converter": self._parse_json,
+            },
+            DefaultValueType.ARRAY_OBJECT: {
+                "type": list,
+                "element_type": dict,
+                "converter": self._parse_json,
+            },
+        }
+
+        validator: dict[str, Any] = type_validators.get(self.type, {})
+        if not validator:
+            if self.type == DefaultValueType.ARRAY_FILES:
+                # Handle files type
+                return self
+            raise ValueError(f"Unsupported type: {self.type}")
+
+        # Handle string input cases
+        if isinstance(self.value, str) and self.type != DefaultValueType.STRING:
+            self.value = validator["converter"](self.value)
+
+        # Validate base type
+        if not isinstance(self.value, validator["type"]):
+            raise ValueError(f"Value must be {validator['type'].__name__} type for {self.value}")
+
+        # Validate array element types
+        if validator["type"] == list and not self._validate_array(self.value, validator["element_type"]):
+            raise ValueError(f"All elements must be {validator['element_type'].__name__} for {self.value}")
+
         return self
+
+
+class RetryConfig(BaseModel):
+    """Node retry configuration"""
+    max_retries: int = 0
+    retry_interval: int = 0
+    retry_enabled: bool = False
+
+    @property
+    def retry_interval_seconds(self) -> float:
+        return self.retry_interval / 1000
 
 
 class BaseNodeData(BaseModel, ABC):
     """Abstract base class for all node data types"""
 
-    type: Any = Field(description="Node type identifier")
     title: str = Field(min_length=1, description="Node display title")
-    desc: str = Field(default="", description="Node description")
+    desc: Optional[str] = Field(default=None, description="Node description")
     version: str = Field(default="1", description="Node version")
-    error_strategy: Optional[Any] = Field(default=None)
+    error_strategy: Optional[ErrorStrategy] = Field(default=None)
+    default_value: Optional[List[DefaultValue]] = Field(default=None)
+    retry_config: RetryConfig = Field(default_factory=RetryConfig)
 
-    # Allow extra fields for DSL compatibility
-    model_config = ConfigDict(extra="allow")
+    @property
+    def default_value_dict(self) -> Dict[str, Any]:
+        """Convert default_value list to dictionary for easy access"""
+        if self.default_value:
+            return {item.key: item.value for item in self.default_value}
+        return {}
 
     @field_validator('title')
     @classmethod

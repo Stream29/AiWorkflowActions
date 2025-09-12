@@ -9,6 +9,8 @@ import yaml
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
+from pydantic import ValidationError
+from dsl_model.dsl import DifyWorkflowDSL
 from ai_workflow_action import WorkflowCore, ContextBuilder, Validator, NodeGenerator
 
 
@@ -341,6 +343,72 @@ class CLI:
             except Exception as e:
                 print(f"Error: {e}")
 
+    def cmd_validate_resources(self) -> bool:
+        """Validate all DSL files under resources/Awesome-Dify-Workflow/DSL using DifyWorkflowDSL.
+        If any errors are found, write a markdown report to project root.
+        """
+        project_root = Path(__file__).resolve().parent
+        dsl_dir = project_root / 'resources' / 'Awesome-Dify-Workflow' / 'DSL'
+        if not dsl_dir.exists():
+            print(f"✗ DSL directory not found: {dsl_dir}")
+            return False
+
+        yaml_files = list(dsl_dir.rglob('*.yml')) + list(dsl_dir.rglob('*.yaml'))
+        if not yaml_files:
+            print(f"✗ No YAML files found in: {dsl_dir}")
+            return False
+
+        print(f"Scanning {len(yaml_files)} DSL files under {dsl_dir} ...")
+        failures: List[Dict[str, Any]] = []
+        successes = 0
+
+        for yf in yaml_files:
+            rel = yf.relative_to(project_root)
+            try:
+                with open(yf, 'r', encoding='utf-8') as f:
+                    data = yaml.safe_load(f)
+                if data is None:
+                    raise ValueError('Empty YAML file')
+                # Parse with Pydantic DSL
+                DifyWorkflowDSL(**data)
+                successes += 1
+                print(f"✓ {rel}")
+            except ValidationError as e:
+                err_list = [f"{' -> '.join(map(str, err['loc']))}: {err['msg']}" for err in e.errors()]
+                failures.append({
+                    'file': str(rel),
+                    'errors': err_list,
+                })
+                print(f"✗ {rel} ({len(err_list)} errors)")
+            except Exception as e:
+                failures.append({
+                    'file': str(rel),
+                    'errors': [str(e)],
+                })
+                print(f"✗ {rel} (exception)")
+
+        if failures:
+            report_path = project_root / 'DIFY_DSL_VALIDATION_REPORT.md'
+            lines = []
+            lines.append('# Dify DSL Validation Report')
+            lines.append('')
+            lines.append(f"Scanned directory: `{dsl_dir}`")
+            lines.append(f"Total files: {len(yaml_files)} | Passed: {successes} | Failed: {len(failures)}")
+            lines.append('')
+            for item in failures:
+                lines.append(f"## {item['file']}")
+                for err in item['errors']:
+                    lines.append(f"- {err}")
+                lines.append('')
+            content = '\n'.join(lines)
+            with open(report_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            print(f"⚠ Validation completed with failures. Report written to {report_path}")
+            return False
+        else:
+            print(f"✅ All {successes} files validated successfully with DifyWorkflowDSL.")
+            return True
+
     def show_help(self):
         """Show help message"""
         print("""
@@ -348,6 +416,7 @@ Commands:
   load <file>              - Load workflow file
   save [file]              - Save workflow (optional: new file)
   validate                 - Validate workflow
+  validate-resources       - Validate all DSL files in resources and write report if any errors
   nodes                    - List all nodes
   generate <after> <type>  - Generate and add node using AI
   auto-next [type]         - 🚀 AI auto-generate next suitable node
@@ -361,6 +430,7 @@ MVP Examples (Real workflow editing):
   auto-next                # AI generates best next node automatically
   auto-next code           # Force generate specific node type
   validate                 # Check workflow integrity
+  validate-resources       # Validate all sample DSLs and generate report if needed
   save enhanced.yml        # Save with new node
 
 Traditional Examples:
@@ -380,6 +450,8 @@ def main():
                        help='Generate node after specified node')
     parser.add_argument('--validate', action='store_true',
                        help='Validate workflow and exit')
+    parser.add_argument('--validate-resources', action='store_true',
+                       help='Validate all DSL files in resources and write report if any errors')
     parser.add_argument('--output', '-o', help='Output file for save')
 
     args = parser.parse_args()
@@ -394,6 +466,9 @@ def main():
     # Execute single command if provided
     if args.validate:
         return 0 if cli.cmd_validate() else 1
+
+    if args.validate_resources:
+        return 0 if cli.cmd_validate_resources() else 1
 
     if args.generate:
         after_node, node_type = args.generate
