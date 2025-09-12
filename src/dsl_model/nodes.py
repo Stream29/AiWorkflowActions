@@ -297,6 +297,11 @@ class IterationStartNodeData(BaseNodeData):
     type: Literal["iteration-start"] = Field(default="iteration-start")
     model_config = ConfigDict(extra="allow")
 
+    @field_validator('title', mode='before')
+    @classmethod
+    def ensure_title(cls, v):
+        return v if v and v.strip() else "Iteration Start"
+
 
 class LoopStartNodeData(BaseNodeData):
     """Loop start pseudo node"""
@@ -319,14 +324,41 @@ class VariableAggregatorNodeData(BaseNodeData):
     model_config = ConfigDict(extra="allow")
 
 
-# For DSL compatibility, use a flexible base type with model_rebuild
-class FlexibleNodeData(BaseModel):
-    """Flexible node data for DSL compatibility"""
-    type: str = Field(description="Node type identifier")
-    title: str = Field(default="", description="Node display title")
-    desc: str = Field(default="", description="Node description")
-
+class DocumentExtractorNodeData(BaseNodeData):
+    """Document extractor node - extract text from documents"""
+    type: Literal["document-extractor"] = Field(default="document-extractor")
+    variable_selector: List[str] = Field(min_items=1, description="Input variable selector")
     model_config = ConfigDict(extra="allow")
+
+
+class ListOperatorNodeData(BaseNodeData):
+    """List operator node - perform operations on lists"""
+    type: Literal["list-operator"] = Field(default="list-operator")
+
+    class FilterCondition(BaseModel):
+        """Filter condition for list operations"""
+        variable_selector: List[str] = Field(min_items=1)
+        filter_operator: Literal[
+            "contains", "start with", "end with", "is", "in", "empty",
+            "not contains", "is not", "not in", "not empty",
+            "=", "≠", "<", ">", "≥", "≤"
+        ]
+        value: str = ""
+
+    operation: Literal["filter", "map", "extract"] = "filter"
+    variable_selector: Optional[List[str]] = None
+    filter_conditions: Optional[List[FilterCondition]] = None
+    model_config = ConfigDict(extra="allow")
+
+    @field_validator('variable_selector', mode='before')
+    @classmethod
+    def ensure_variable_selector(cls, v):
+        if v is None or v == []:
+            return ["sys", "query"]
+        return v
+
+
+
 
 
 # Discriminated union of all node data types by the 'type' field
@@ -351,6 +383,8 @@ NodeData = Annotated[
         VariableAggregatorNodeData,
         ParameterExtractorNodeData,
         QuestionClassifierNodeData,
+        DocumentExtractorNodeData,
+        ListOperatorNodeData,
     ],
     Field(discriminator='type')
 ]
