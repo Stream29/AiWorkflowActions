@@ -1,18 +1,39 @@
 """
 AiWorkflowActions - AI-powered workflow node generation for Dify
+Clean layered architecture:
+1. DifyWorkflowDSL (from dsl_model) - Core data structures
+2. DifyWorkflowDslFile - Basic operations + RAII
+3. AiWorkflowAction - AI operations + API resource management
+4. CLI - User interface layer
 """
 
-from .workflow_core import WorkflowCore
-from .validator import Validator
-from .context_builder import ContextBuilder
-from .node_generator import NodeGenerator
-from cli import CLI
+# New layered architecture exports
+from .dsl_file import DifyWorkflowDslFile
+from .context_builder import DifyWorkflowContextBuilder
+from .ai_workflow_action import AiWorkflowAction
 
-__version__ = "0.2.0"
+# Shared models
+from .models import (
+    NodeConnection, NodeInfo, WorkflowInfo, ValidationError,
+    NodeValidationResult, WorkflowValidationResult, LinearityCheck,
+    WorkflowContext, GenerationResult, DSLValidationReport,
+    DSLValidationSummary, CLICommand, CommandResult, NodeRecommendation,
+    RecommendationResult
+)
+
+__version__ = "1.0.0"
+
+# Clean architecture exports
 __all__ = [
-    "WorkflowCore",
-    "Validator", 
-    "ContextBuilder",
-    "NodeGenerator",
-    "CLI"
+    # Core layered components
+    'DifyWorkflowDslFile',
+    'DifyWorkflowContextBuilder', 
+    'AiWorkflowAction',
+    
+    # Shared models
+    'NodeConnection', 'NodeInfo', 'WorkflowInfo', 'ValidationError',
+    'NodeValidationResult', 'WorkflowValidationResult', 'LinearityCheck',
+    'WorkflowContext', 'GenerationResult', 'DSLValidationReport',
+    'DSLValidationSummary', 'CLICommand', 'CommandResult', 'NodeRecommendation',
+    'RecommendationResult'
 ]

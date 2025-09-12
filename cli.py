@@ -11,17 +11,19 @@ from typing import Optional, Dict, Any, List
 
 from pydantic import ValidationError
 from dsl_model.dsl import DifyWorkflowDSL
-from ai_workflow_action import WorkflowCore, ContextBuilder, Validator, NodeGenerator
+from ai_workflow_action import (
+    AiWorkflowAction, DifyWorkflowDslFile,
+    WorkflowInfo, WorkflowValidationResult, LinearityCheck, 
+    NodeInfo, NodeConnection, DSLValidationSummary, DSLValidationReport
+)
 
 
 class CLI:
     """Interactive CLI for workflow management and AI generation"""
 
     def __init__(self):
-        self.workflow = WorkflowCore()
-        self.validator = Validator()
-        self.context_builder = ContextBuilder()
-        self.generator = None  # Lazy load if AI features are used
+        # Use new layered architecture
+        self.ai_action: Optional[AiWorkflowAction] = None
         self.current_file = None
 
     def cmd_load(self, file_path: str) -> bool:
@@ -32,27 +34,29 @@ class CLI:
                 print(f"✗ File not found: {file_path}")
                 return False
 
-            self.workflow.load(file_path)
+            # Create DSL file and AI action with new architecture
+            dsl_file = DifyWorkflowDslFile(file_path)
+            self.ai_action = AiWorkflowAction(dsl_file)
             self.current_file = file_path
 
-            # Validate and show info
-            info = self.workflow.get_workflow_info()
+            # Show workflow info
+            info = dsl_file.get_workflow_info()
             print(f"✓ Loaded: {file_path}")
-            print(f"  App: {info['app_name']}")
-            print(f"  Description: {info['description'][:50]}{'...' if len(info['description']) > 50 else ''}")
-            print(f"  Nodes: {info['node_count']}, Edges: {info['edge_count']}")
+            print(f"  App: {info.app_name}")
+            print(f"  Description: {info.description[:50]}{'...' if len(info.description) > 50 else ''}")
+            print(f"  Nodes: {info.node_count}, Edges: {info.edge_count}")
 
             # Show node types
-            if info['node_types']:
-                types_str = ', '.join([f"{k}({v})" for k, v in info['node_types'].items()])
+            if info.node_types:
+                types_str = ', '.join([f"{k}({v})" for k, v in info.node_types.items()])
                 print(f"  Types: {types_str}")
 
-            # Check if linear
-            is_linear, error = self.validator.is_linear_workflow(self.workflow.workflow_data)
-            if is_linear:
+            # Check if linear (AI compatibility)
+            linearity_check = dsl_file.is_linear_workflow()
+            if linearity_check.is_linear:
                 print("  ✓ Linear workflow (AI generation supported)")
             else:
-                print(f"  ⚠ Non-linear workflow: {error}")
+                print(f"  ⚠ Non-linear workflow: {linearity_check.error_message}")
                 print("  Note: AI generation only works with linear workflows")
 
             return True
@@ -68,8 +72,12 @@ class CLI:
 
     def cmd_save(self, file_path: Optional[str] = None) -> bool:
         """Save the workflow"""
+        if not self.ai_action:
+            print("✗ No workflow loaded")
+            return False
+            
         try:
-            output = self.workflow.save(file_path)
+            output = self.ai_action.save_workflow(file_path)
             print(f"✓ Saved: {output}")
             return True
         except Exception as e:
@@ -78,45 +86,45 @@ class CLI:
 
     def cmd_validate(self) -> bool:
         """Validate the workflow"""
-        if not self.workflow.workflow_data:
+        if not self.ai_action:
             print("✗ No workflow loaded")
             return False
 
-        is_valid, results = self.validator.validate_workflow(self.workflow.workflow_data)
+        validation_result = self.ai_action.dsl_file.validate_workflow()
 
         print("\n=== Validation Results ===")
 
-        if results['structure_errors']:
+        if validation_result.structure_errors:
             print("Structure errors:")
-            for error in results['structure_errors']:
+            for error in validation_result.structure_errors:
                 print(f"  - {error}")
 
-        if results['node_errors']:
+        if validation_result.node_errors:
             print("Node errors:")
-            for node_id, errors in results['node_errors'].items():
+            for node_id, errors in validation_result.node_errors.items():
                 print(f"  {node_id}:")
                 for error in errors:
                     print(f"    - {error}")
 
-        if results['graph_errors']:
+        if validation_result.graph_errors:
             print("Graph errors:")
-            for error in results['graph_errors']:
+            for error in validation_result.graph_errors:
                 print(f"  - {error}")
 
-        if is_valid:
+        if validation_result.is_valid:
             print("✓ Workflow is valid!")
         else:
             print("✗ Workflow has errors")
 
-        return is_valid
+        return validation_result.is_valid
 
     def cmd_nodes(self) -> None:
         """List all nodes"""
-        if not self.workflow.workflow_data:
+        if not self.ai_action:
             print("✗ No workflow loaded")
             return
 
-        nodes = self.workflow.nodes
+        nodes = self.ai_action.dsl_file.nodes
         print(f"\n=== Nodes ({len(nodes)}) ===")
 
         for i, node in enumerate(nodes, 1):
@@ -125,91 +133,34 @@ class CLI:
             node_type = node_data.get('type')
             node_title = node_data.get('title', 'Untitled')
 
-            connections = self.workflow.get_node_connections(node_id)
+            connections = self.ai_action.dsl_file.get_node_connections(node_id)
             conn_info = []
-            if connections['incoming']:
-                conn_info.append(f"← {len(connections['incoming'])}")
-            if connections['outgoing']:
-                conn_info.append(f"→ {len(connections['outgoing'])}")
+            if connections.incoming:
+                conn_info.append(f"← {len(connections.incoming)}")
+            if connections.outgoing:
+                conn_info.append(f"→ {len(connections.outgoing)}")
             conn_str = f" [{', '.join(conn_info)}]" if conn_info else ""
 
             print(f"  {i}. [{node_id}] {node_title} ({node_type}){conn_str}")
 
     def cmd_generate(self, after_node_id: str, node_type: str) -> Optional[str]:
         """Generate and add a new node using AI"""
-        if not self.workflow.workflow_data:
+        if not self.ai_action:
             print("✗ No workflow loaded")
             return None
 
-        # Check if workflow is linear
-        is_linear, error = self.validator.is_linear_workflow(self.workflow.workflow_data)
-        if not is_linear:
-            print(f"✗ AI generation requires linear workflow: {error}")
-            return None
-
-        # Initialize generator if needed
-        if not self.generator:
-            try:
-                self.generator = NodeGenerator()
-            except Exception as e:
-                print(f"✗ Failed to initialize AI generator: {e}")
-                return None
-
         try:
             print(f"\n🤖 Generating {node_type} node after {after_node_id}...")
-
-            # Build context (prefer DSL model if available)
-            workflow_input = self.workflow.dsl if getattr(self.workflow, 'dsl', None) is not None else self.workflow.workflow_data
-            context = self.context_builder.build_context(
-                workflow_input,
-                target_position=after_node_id
-            )
-
-            # Get schema for the node type
-            schema = self.validator.get_node_schema(node_type)
-
-            # Generate with retry on validation failure
-            max_attempts = 3
-            for attempt in range(max_attempts):
-                print(f"  Attempt {attempt + 1}/{max_attempts}...")
-
-                # Generate node data
-                previous_errors = None
-                node_data = self.generator.generate_node(
-                    node_type, context, schema, previous_errors
-                )
-
-                # Validate generated data
-                is_valid, validation_errors = self.validator.validate_node_data(
-                    node_type, node_data
-                )
-
-                if is_valid:
-                    print("  ✓ Generated valid node data")
-
-                    # Create full node structure
-                    new_node = {
-                        'data': {
-                            'type': node_type,
-                            **node_data
-                        },
-                        'type': 'custom',
-                        'selected': False,
-                        'sourcePosition': 'right',
-                        'targetPosition': 'left'
-                    }
-
-                    # Add to workflow
-                    node_id = self.workflow.add_node_after(after_node_id, new_node)
-                    print(f"✓ Added node: {node_id}")
-                    return node_id
-                else:
-                    print(f"  ✗ Validation failed:")
-                    for error in validation_errors[:3]:  # Show first 3 errors
-                        print(f"    - {error}")
-
-            print(f"✗ Failed to generate valid node after {max_attempts} attempts")
-            return None
+            
+            # Use the AI action to generate node (simplified interface)
+            node_id = self.ai_action.generate_node(after_node_id, node_type)
+            
+            if node_id:
+                print(f"✓ Added node: {node_id}")
+                return node_id
+            else:
+                print("✗ Failed to generate valid node after multiple attempts")
+                return None
 
         except Exception as e:
             print(f"✗ Generation failed: {e}")
@@ -217,66 +168,55 @@ class CLI:
 
     def cmd_auto_next(self, node_type: Optional[str] = None) -> Optional[str]:
         """AI auto-generate and add the next most suitable node"""
-        if not self.workflow.workflow_data:
+        if not self.ai_action:
             print("✗ No workflow loaded")
             return None
 
-        # Check if workflow is linear
-        is_linear, error = self.validator.is_linear_workflow(self.workflow.workflow_data)
-        if not is_linear:
-            print(f"✗ AI generation requires linear workflow: {error}")
-            return None
+        try:
+            # Get analysis to show user what's happening
+            if not node_type:
+                analysis = self.ai_action.analyze_workflow()
+                completion_analysis = analysis.get("completion_analysis", {})
+                
+                if completion_analysis.get("is_complete", False):
+                    print("✓ Workflow appears to be complete")
+                    return None
+                
+                last_node = completion_analysis.get("last_node", {})
+                recommendations = completion_analysis.get("recommendations", [])
+                
+                print(f"\n🤖 Analyzing workflow ending at: {last_node.get('id')} ({last_node.get('type')})")
+                
+                if recommendations:
+                    print(f"Recommended node types: {', '.join(recommendations)}")
+                    node_type = recommendations[0]
+                    print(f"Using: {node_type}")
+                else:
+                    print("✗ No suitable node type recommendations")
+                    return None
 
-        # Find terminal nodes
-        terminal_nodes = self.workflow.get_terminal_nodes()
-        if not terminal_nodes:
-            print("✗ No terminal nodes found in workflow")
-            return None
-
-        if len(terminal_nodes) > 1:
-            print(f"⚠ Multiple terminal nodes found, using first: {terminal_nodes[0]['id']}")
-
-        terminal_node = terminal_nodes[0]
-        terminal_id = terminal_node['id']
-        terminal_type = terminal_node.get('data', {}).get('type')
-
-        print(f"\n🤖 Analyzing workflow ending at: {terminal_id} ({terminal_type})")
-
-        # Get recommended node types if none specified
-        if not node_type:
-            recommended_types = self.get_recommended_node_types(terminal_type)
-            if not recommended_types:
-                print("✗ No suitable node type recommendations")
+            # Use the AI action's auto-generation
+            node_id = self.ai_action.auto_generate_next_node(node_type)
+            
+            if node_id:
+                print(f"✓ Added node: {node_id}")
+                return node_id
+            else:
+                print("✗ Failed to generate next node")
                 return None
 
-            print(f"Recommended node types: {', '.join(recommended_types)}")
-            node_type = recommended_types[0]  # Use first recommendation
-            print(f"Using: {node_type}")
-
-        # Generate and add the node
-        return self.cmd_generate(terminal_id, node_type)
-
-    def get_recommended_node_types(self, last_node_type: str) -> List[str]:
-        """Get recommended next node types based on the last node"""
-        recommendations = {
-            'start': ['llm', 'code', 'http-request', 'variable-assigner'],
-            'llm': ['code', 'end', 'if-else', 'variable-assigner', 'parameter-extractor'],
-            'code': ['end', 'llm', 'if-else', 'variable-assigner'],
-            'http-request': ['code', 'llm', 'parameter-extractor', 'end'],
-            'variable-assigner': ['llm', 'code', 'end', 'if-else'],
-            'parameter-extractor': ['llm', 'code', 'end'],
-            'if-else': ['llm', 'code', 'end'],
-        }
-        return recommendations.get(last_node_type, ['end'])
+        except Exception as e:
+            print(f"✗ Auto-generation failed: {e}")
+            return None
 
     def cmd_remove(self, node_id: str) -> bool:
         """Remove a node"""
-        if not self.workflow.workflow_data:
+        if not self.ai_action:
             print("✗ No workflow loaded")
             return False
 
         try:
-            if self.workflow.remove_node(node_id):
+            if self.ai_action.dsl_file.remove_node(node_id):
                 print(f"✓ Removed node: {node_id}")
                 return True
             else:
@@ -360,7 +300,7 @@ class CLI:
             return False
 
         print(f"Scanning {len(yaml_files)} DSL files under {dsl_dir} ...")
-        failures: List[Dict[str, Any]] = []
+        failures: List[DSLValidationReport] = []
         successes = 0
 
         for yf in yaml_files:
@@ -376,16 +316,16 @@ class CLI:
                 print(f"✓ {rel}")
             except ValidationError as e:
                 err_list = [f"{' -> '.join(map(str, err['loc']))}: {err['msg']}" for err in e.errors()]
-                failures.append({
-                    'file': str(rel),
-                    'errors': err_list,
-                })
+                failures.append(DSLValidationReport(
+                    file=str(rel),
+                    errors=err_list,
+                ))
                 print(f"✗ {rel} ({len(err_list)} errors)")
             except Exception as e:
-                failures.append({
-                    'file': str(rel),
-                    'errors': [str(e)],
-                })
+                failures.append(DSLValidationReport(
+                    file=str(rel),
+                    errors=[str(e)],
+                ))
                 print(f"✗ {rel} (exception)")
 
         if failures:
@@ -397,8 +337,8 @@ class CLI:
             lines.append(f"Total files: {len(yaml_files)} | Passed: {successes} | Failed: {len(failures)}")
             lines.append('')
             for item in failures:
-                lines.append(f"## {item['file']}")
-                for err in item['errors']:
+                lines.append(f"## {item.file}")
+                for err in item.errors:
                     lines.append(f"- {err}")
                 lines.append('')
             content = '\n'.join(lines)
