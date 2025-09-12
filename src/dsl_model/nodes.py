@@ -110,14 +110,20 @@ class HTTPRequestNodeData(BaseNodeData):
         type: Literal["no-auth", "api-key", "bearer-token"] = "no-auth"
         config: Optional[Dict[str, str]] = None
 
-    # Align with Dify: allow HEAD and case-insensitive methods; be more permissive on shapes
+    class Timeout(BaseModel):
+        """HTTP timeout configuration matching Dify's HttpRequestNodeTimeout"""
+        connect: int = 10
+        read: int = 30
+        write: int = 30
+
+    # Align with Dify: headers and params are strings, not dicts
     method: str = "GET"
     url: str = Field(min_length=1, description="Request URL")
-    headers: Dict[str, Any] = Field(default_factory=dict)
-    params: Dict[str, Any] = Field(default_factory=dict)
+    headers: str = ""
+    params: str = ""
     body: Optional[Dict[str, Any]] = None
     authorization: Authorization = Field(default_factory=Authorization)
-    timeout: int = Field(default=30, ge=1, le=300)
+    timeout: Optional[Timeout] = None
 
     @field_validator('method', mode='before')
     @classmethod
@@ -132,27 +138,36 @@ class HTTPRequestNodeData(BaseNodeData):
 
     @field_validator('headers', 'params', mode='before')
     @classmethod
-    def coerce_mapping(cls, v):
-        if v in (None, "", []):
-            return {}
+    def coerce_string_fields(cls, v):
+        if v is None:
+            return ""
+        if isinstance(v, str):
+            return v
+        if isinstance(v, dict):
+            import json
+            return json.dumps(v)
         if isinstance(v, list):
-            # Convert list of {key:..., value:...} or [ [k,v], ... ] to dict
-            out: Dict[str, Any] = {}
-            for item in v:
-                if isinstance(item, dict):
-                    k = item.get('key') or item.get('name') or item.get('k')
-                    if k is not None:
-                        out[str(k)] = item.get('value')
-                elif isinstance(item, (list, tuple)) and len(item) == 2:
-                    out[str(item[0])] = item[1]
-            return out or v
-        return v
+            import json
+            return json.dumps(v)
+        return str(v)
 
     @field_validator('timeout', mode='before')
     @classmethod
     def coerce_timeout(cls, v):
-        if isinstance(v, str) and v.strip().isdigit():
-            return int(v)
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return cls.Timeout(**v)
+        if isinstance(v, (int, float)):
+            # Convert single timeout value to timeout object
+            timeout_val = int(v)
+            return cls.Timeout(connect=timeout_val, read=timeout_val, write=timeout_val)
+        if isinstance(v, str):
+            try:
+                timeout_val = int(float(v.strip()))
+                return cls.Timeout(connect=timeout_val, read=timeout_val, write=timeout_val)
+            except (ValueError, TypeError):
+                return None
         return v
 
     @field_validator('url')
@@ -192,7 +207,12 @@ class IfElseNodeData(BaseNodeData):
     class Condition(BaseModel):
         """Single condition"""
         variable_selector: List[str] = Field(min_items=1)
-        comparison_operator: Literal["=", "≠", ">", "<", "≥", "≤", "contains", "starts with", "ends with"]
+        comparison_operator: Literal[
+            "=", "≠", ">", "<", "≥", "≤", 
+            "contains", "not contains", "start with", "end with", "starts with", "ends with",
+            "is", "is not", "empty", "not empty", "in", "not in", "all of",
+            "null", "not null", "exists", "not exists"
+        ]
         value: str
 
     class Case(BaseModel):
@@ -281,8 +301,21 @@ class IterationNodeData(BaseNodeData):
 class ParameterExtractorNodeData(BaseNodeData):
     """Parameter extractor node"""
     type: Literal["parameter-extractor"] = Field(default="parameter-extractor")
-    query: str = Field(min_length=1)
+    query: Union[str, List[str]] = Field(description="Query string or list of query strings")
     parameters: List[Dict[str, Any]] = Field(min_items=1)
+    model: Optional[ModelConfig] = None
+    instruction: Optional[str] = None
+    reasoning_mode: Literal["function_call", "prompt"] = "function_call"
+    vision: Optional[VisionConfig] = None
+
+    @field_validator('query', mode='before')
+    @classmethod
+    def normalize_query(cls, v):
+        if v is None or v == "":
+            return []
+        if isinstance(v, str):
+            return [v] if v.strip() else []
+        return v
 
 
 class QuestionClassifierNodeData(BaseNodeData):
