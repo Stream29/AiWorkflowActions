@@ -370,7 +370,7 @@ class CLI:
                 if data is None:
                     raise ValueError('Empty YAML file')
                 # Parse with Pydantic DSL
-                DifyWorkflowDSL(**data)
+                DifyWorkflowDSL.model_validate(data)
                 successes += 1
                 print(f"✓ {rel}")
             except ValidationError as e:

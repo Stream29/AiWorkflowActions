@@ -14,13 +14,6 @@ class AppMetadata(BaseModel):
     name: str = Field(min_length=1)
     use_icon_as_answer_icon: bool = Field(default=False)
 
-    @field_validator('name')
-    @classmethod
-    def validate_name(cls, v):
-        if not v.strip():
-            raise ValueError('app name cannot be empty')
-        return v.strip()
-
 
 class Dependency(BaseModel):
     """External dependency definition"""

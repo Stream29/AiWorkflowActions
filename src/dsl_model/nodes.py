@@ -33,13 +33,6 @@ class AnswerNodeData(BaseNodeData):
     type: Literal["answer"] = Field(default="answer")
     answer: str = Field(description="Answer template with variable substitution")
 
-    @field_validator('answer')
-    @classmethod
-    def validate_answer(cls, v):
-        if not v.strip():
-            raise ValueError('answer cannot be empty')
-        return v
-
 
 class LLMNodeData(BaseNodeData):
     """LLM node - AI model interaction"""
@@ -53,13 +46,6 @@ class LLMNodeData(BaseNodeData):
     structured_output: Optional[Dict[str, Any]] = None
     structured_output_switch_on: bool = Field(default=False, alias="structured_output_enabled")
     reasoning_format: Literal["separated", "tagged"] = Field(default="tagged")
-
-    @field_validator("prompt_config", mode="before")
-    @classmethod
-    def convert_none_prompt_config(cls, v: Any):
-        if v is None:
-            return PromptConfig()
-        return v
 
     @property
     def structured_output_enabled(self) -> bool:
@@ -93,9 +79,8 @@ class CodeNodeData(BaseNodeData):
         name: str
         version: str
 
-    # Removed type field to match dify/api
     variables: List[VariableSelector]
-    code_language: Literal[CodeLanguage.PYTHON3, CodeLanguage.JAVASCRIPT]
+    code_language: CodeLanguage
     code: str
     outputs: Dict[str, Output]
     dependencies: Optional[List[Dependency]] = None
@@ -116,73 +101,20 @@ class HTTPRequestNodeData(BaseNodeData):
         read: int = 30
         write: int = 30
 
-    # Align with Dify: headers and params are strings, not dicts
-    method: str = "GET"
+    method: str
     url: str = Field(min_length=1, description="Request URL")
-    headers: str = ""
-    params: str = ""
+    headers: str
+    params: str
     body: Optional[Dict[str, Any]] = None
     authorization: Authorization = Field(default_factory=Authorization)
     timeout: Optional[Timeout] = None
-
-    @field_validator('method', mode='before')
-    @classmethod
-    def normalize_method(cls, v):
-        if v is None:
-            return "GET"
-        if isinstance(v, str):
-            v2 = v.strip().upper()
-            allowed = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"}
-            return v2 if v2 in allowed else v2
-        return v
-
-    @field_validator('headers', 'params', mode='before')
-    @classmethod
-    def coerce_string_fields(cls, v):
-        if v is None:
-            return ""
-        if isinstance(v, str):
-            return v
-        if isinstance(v, dict):
-            import json
-            return json.dumps(v)
-        if isinstance(v, list):
-            import json
-            return json.dumps(v)
-        return str(v)
-
-    @field_validator('timeout', mode='before')
-    @classmethod
-    def coerce_timeout(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return cls.Timeout(**v)
-        if isinstance(v, (int, float)):
-            # Convert single timeout value to timeout object
-            timeout_val = int(v)
-            return cls.Timeout(connect=timeout_val, read=timeout_val, write=timeout_val)
-        if isinstance(v, str):
-            try:
-                timeout_val = int(float(v.strip()))
-                return cls.Timeout(connect=timeout_val, read=timeout_val, write=timeout_val)
-            except (ValueError, TypeError):
-                return None
-        return v
-
-    @field_validator('url')
-    @classmethod
-    def validate_url(cls, v):
-        if not v.startswith(('http://', 'https://', '{{')):
-            raise ValueError('URL must be a valid HTTP(S) URL or template variable')
-        return v
 
     model_config = ConfigDict(extra="allow")
 
 
 class ToolNodeData(BaseNodeData):
     """Tool node - external tool integration"""
-    type: Literal["tool"] = Field(default="tool")
+    type: Literal["tool"]
 
     class ParameterSchema(BaseModel):
         """Tool parameter schema"""
@@ -202,11 +134,11 @@ class ToolNodeData(BaseNodeData):
 
 class IfElseNodeData(BaseNodeData):
     """If-else node - conditional branching"""
-    type: Literal["if-else"] = Field(default="if-else")
+    type: Literal["if-else"]
 
     class Condition(BaseModel):
         """Single condition"""
-        variable_selector: List[str] = Field(min_items=1)
+        variable_selector: List[str]
         comparison_operator: Literal[
             "=", "≠", ">", "<", "≥", "≤", 
             "contains", "not contains", "start with", "end with", "starts with", "ends with",
@@ -218,32 +150,17 @@ class IfElseNodeData(BaseNodeData):
     class Case(BaseModel):
         """Condition case"""
         case_id: str = Field(min_length=1)
-        conditions: List["IfElseNodeData.Condition"] = Field(min_items=1)
-        logical_operator: Literal["and", "or"] = "and"
+        conditions: List["IfElseNodeData.Condition"]
+        logical_operator: Literal["and", "or"]
 
-    # Removed type field to match dify/api
-    cases: List[Case] = Field(min_items=1)
-
-    @field_validator('cases')
-    @classmethod
-    def validate_cases(cls, v):
-        case_ids = [case.case_id for case in v]
-        if len(case_ids) != len(set(case_ids)):
-            raise ValueError('case_id must be unique')
-        return v
+    cases: List[Case]
 
 
 class TemplateTransformNodeData(BaseNodeData):
     """Template transform node - text template processing"""
-    type: Literal["template-transform"] = Field(default="template-transform")
+    type: Literal["template-transform"]
     template: str = Field(min_length=1, description="Jinja2 template")
 
-    @field_validator('template')
-    @classmethod
-    def validate_template(cls, v):
-        if not v.strip():
-            raise ValueError('template cannot be empty')
-        return v
 
 
 class VariableAssignerNodeData(BaseNodeData):
@@ -253,18 +170,6 @@ class VariableAssignerNodeData(BaseNodeData):
     input_variable_selector: Optional[List[str]] = None
     write_mode: Literal["over-write", "append", "clear"] = "over-write"
 
-    @model_validator(mode="before")
-    @classmethod
-    def accept_alt_keys(cls, data: Any):
-        if isinstance(data, dict):
-            # Accept alternative field names used in some DSLs
-            if 'assigned_variable_selector' not in data and 'assigned_variable' in data:
-                v = data.get('assigned_variable')
-                data['assigned_variable_selector'] = v if isinstance(v, list) else [str(v)] if v is not None else None
-            if 'input_variable_selector' not in data and 'input_variable' in data:
-                v = data.get('input_variable')
-                data['input_variable_selector'] = v if isinstance(v, list) else [str(v)] if v is not None else None
-        return data
 
     model_config = ConfigDict(extra="allow")
 
@@ -272,8 +177,8 @@ class VariableAssignerNodeData(BaseNodeData):
 class KnowledgeRetrievalNodeData(BaseNodeData):
     """Knowledge retrieval node"""
     type: Literal["knowledge-retrieval"] = Field(default="knowledge-retrieval")
-    dataset_ids: List[str] = Field(min_items=1)
-    query_variable_selector: List[str] = Field(min_items=1)
+    dataset_ids: List[str]
+    query_variable_selector: List[str]
     retrieval_mode: Literal["single", "multiple"] = "single"
     top_k: int = Field(default=3, ge=1, le=20)
     score_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
@@ -282,7 +187,6 @@ class KnowledgeRetrievalNodeData(BaseNodeData):
 class AgentNodeData(BaseNodeData):
     """Agent node - intelligent agent interaction"""
     type: Literal["agent"] = Field(default="agent")
-    # Make strategy optional to align with Dify DSL variants where strategy metadata is split
     agent_strategy: Optional[str] = None
     agent_parameters: Dict[str, Any] = Field(default_factory=dict)
     output_schema: Optional[Dict[str, Any]] = None
@@ -293,8 +197,8 @@ class AgentNodeData(BaseNodeData):
 class IterationNodeData(BaseNodeData):
     """Iteration node - loop processing"""
     type: Literal["iteration"] = Field(default="iteration")
-    iterator_selector: List[str] = Field(min_items=1)
-    output_selector: List[str] = Field(min_items=1)
+    iterator_selector: List[str]
+    output_selector: List[str]
     output_type: SegmentType = SegmentType.ARRAY_OBJECT
 
 
@@ -302,38 +206,24 @@ class ParameterExtractorNodeData(BaseNodeData):
     """Parameter extractor node"""
     type: Literal["parameter-extractor"] = Field(default="parameter-extractor")
     query: Union[str, List[str]] = Field(description="Query string or list of query strings")
-    parameters: List[Dict[str, Any]] = Field(min_items=1)
+    parameters: List[Dict[str, Any]]
     model: Optional[ModelConfig] = None
     instruction: Optional[str] = None
     reasoning_mode: Literal["function_call", "prompt"] = "function_call"
     vision: Optional[VisionConfig] = None
 
-    @field_validator('query', mode='before')
-    @classmethod
-    def normalize_query(cls, v):
-        if v is None or v == "":
-            return []
-        if isinstance(v, str):
-            return [v] if v.strip() else []
-        return v
-
 
 class QuestionClassifierNodeData(BaseNodeData):
     """Question classifier node"""
     type: Literal["question-classifier"] = Field(default="question-classifier")
-    query_variable_selector: List[str] = Field(min_items=1)
-    classes: List[Dict[str, Any]] = Field(min_items=2)
+    query_variable_selector: List[str]
+    classes: List[Dict[str, Any]]
 
 
 class IterationStartNodeData(BaseNodeData):
     """Iteration start pseudo node used by Dify to mark loop entry"""
     type: Literal["iteration-start"] = Field(default="iteration-start")
     model_config = ConfigDict(extra="allow")
-
-    @field_validator('title', mode='before')
-    @classmethod
-    def ensure_title(cls, v):
-        return v if v and v.strip() else "Iteration Start"
 
 
 class LoopStartNodeData(BaseNodeData):
@@ -359,18 +249,18 @@ class VariableAggregatorNodeData(BaseNodeData):
 
 class DocumentExtractorNodeData(BaseNodeData):
     """Document extractor node - extract text from documents"""
-    type: Literal["document-extractor"] = Field(default="document-extractor")
-    variable_selector: List[str] = Field(min_items=1, description="Input variable selector")
+    type: Literal["document-extractor"]
+    variable_selector: List[str]
     model_config = ConfigDict(extra="allow")
 
 
 class ListOperatorNodeData(BaseNodeData):
     """List operator node - perform operations on lists"""
-    type: Literal["list-operator"] = Field(default="list-operator")
+    type: Literal["list-operator"]
 
     class FilterCondition(BaseModel):
         """Filter condition for list operations"""
-        variable_selector: List[str] = Field(min_items=1)
+        variable_selector: List[str]
         filter_operator: Literal[
             "contains", "start with", "end with", "is", "in", "empty",
             "not contains", "is not", "not in", "not empty",
@@ -383,40 +273,20 @@ class ListOperatorNodeData(BaseNodeData):
     filter_conditions: Optional[List[FilterCondition]] = None
     model_config = ConfigDict(extra="allow")
 
-    @field_validator('variable_selector', mode='before')
-    @classmethod
-    def ensure_variable_selector(cls, v):
-        if v is None or v == []:
-            return ["sys", "query"]
-        return v
-
 
 class NoteNodeData(BaseModel):
     """Note node - annotation/comment node for workflow documentation"""
     type: Literal[""] = Field(default="")
     title: str = Field(default="")
-    theme: Literal["blue", "cyan", "green", "yellow", "pink", "violet"] = "blue"
+    theme: Literal["blue", "cyan", "green", "yellow", "pink", "violet"]
     text: Optional[str] = None
     author: str = Field(default="")
     showAuthor: bool = Field(default=False)
     width: int = Field(default=240)
     height: int = Field(default=88)
-    
     # Note nodes can have complex rich text data structure
     data: Optional[Dict[str, Any]] = None
-    
     model_config = ConfigDict(extra="allow")
-    
-    @field_validator('title', mode='before')
-    @classmethod
-    def normalize_title(cls, v):
-        if v is None or (isinstance(v, str) and not v.strip()):
-            return "Note"
-        return str(v).strip()
-
-
-
-
 
 # Discriminated union of all node data types by the 'type' field
 NodeData = Annotated[

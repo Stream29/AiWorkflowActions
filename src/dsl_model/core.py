@@ -51,26 +51,6 @@ class ModelConfig(BaseModel):
     mode: LLMMode
     completion_params: Dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator('completion_params')
-    @classmethod
-    def validate_completion_params(cls, v):
-        """Validate common completion parameters"""
-        allowed_params = {
-            'temperature', 'top_p', 'top_k', 'max_tokens', 
-            'presence_penalty', 'frequency_penalty', 'response_format'
-        }
-        for key in v:
-            if key not in allowed_params:
-                continue
-            # Validate specific parameter ranges
-            if key == 'temperature' and not (0 <= v[key] <= 2):
-                raise ValueError('temperature must be between 0 and 2')
-            elif key == 'top_p' and not (0 <= v[key] <= 1):
-                raise ValueError('top_p must be between 0 and 1')
-            elif key in ['presence_penalty', 'frequency_penalty'] and not (-2 <= v[key] <= 2):
-                raise ValueError(f'{key} must be between -2 and 2')
-        return v
-
 
 class PromptMessage(BaseModel):
     """LLM prompt message"""
@@ -82,13 +62,6 @@ class PromptMessage(BaseModel):
 class PromptConfig(BaseModel):
     """Prompt configuration for Jinja2 variables"""
     jinja2_variables: Sequence[VariableSelector] = Field(default_factory=list)
-
-    @field_validator("jinja2_variables", mode="before")
-    @classmethod
-    def convert_none_jinja2_variables(cls, v: Any):
-        if v is None:
-            return []
-        return v
 
 
 class LLMNodeChatModelMessage(PromptMessage):
@@ -123,13 +96,6 @@ class VisionConfig(BaseModel):
     """Vision configuration for LLM nodes"""
     enabled: bool = Field(default=False)
     configs: VisionConfigOptions = Field(default_factory=VisionConfigOptions)
-
-    @field_validator("configs", mode="before")
-    @classmethod
-    def convert_none_configs(cls, v: Any):
-        if v is None:
-            return VisionConfigOptions()
-        return v
 
 
 NumberType = Union[int, float]
@@ -234,7 +200,7 @@ class RetryConfig(BaseModel):
 class BaseNodeData(BaseModel, ABC):
     """Abstract base class for all node data types"""
 
-    title: str = Field(min_length=1, description="Node display title")
+    title: str = Field(description="Node display title")
     desc: Optional[str] = Field(default=None, description="Node description")
     version: str = Field(default="1", description="Node version")
     error_strategy: Optional[ErrorStrategy] = Field(default=None)
@@ -247,10 +213,3 @@ class BaseNodeData(BaseModel, ABC):
         if self.default_value:
             return {item.key: item.value for item in self.default_value}
         return {}
-
-    @field_validator('title')
-    @classmethod
-    def validate_title(cls, v):
-        if not v.strip():
-            raise ValueError('title cannot be empty')
-        return v.strip()

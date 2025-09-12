@@ -110,7 +110,7 @@ class Validator:
         
         # Validate by parsing full DSL using new Pydantic models
         try:
-            DifyWorkflowDSL(**workflow_data)
+            DifyWorkflowDSL.model_validate(workflow_data)
         except ValidationError as e:
             for error in e.errors():
                 field = ' -> '.join(str(loc) for loc in error['loc'])
