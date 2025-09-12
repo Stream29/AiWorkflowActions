@@ -5,10 +5,12 @@ Pure UI layer that delegates to core modules
 
 import argparse
 import json
+import os
 import yaml
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
+from dotenv import load_dotenv
 from pydantic import ValidationError
 from dsl_model.dsl import DifyWorkflowDSL
 from ai_workflow_action import (
@@ -16,6 +18,12 @@ from ai_workflow_action import (
     WorkflowInfo, WorkflowValidationResult, LinearityCheck, 
     NodeInfo, NodeConnection, DSLValidationSummary, DSLValidationReport
 )
+
+# Load environment variables from project root
+project_root = Path(__file__).resolve().parent
+env_path = project_root / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
 
 
 class CLI:
@@ -34,14 +42,38 @@ class CLI:
                 print(f"✗ File not found: {file_path}")
                 return False
 
-            # Create DSL file and AI action with new architecture
+            # Get API key from environment - required for operation
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                print("✗ ANTHROPIC_API_KEY not found in environment variables")
+                print("  This tool requires an Anthropic API key to function")
+                return False
+
+            # Create DSL file and validate immediately
             dsl_file = DifyWorkflowDslFile(file_path)
-            self.ai_action = AiWorkflowAction(dsl_file)
+            
+            # Validate DSL before proceeding
+            validation_result = dsl_file.validate_workflow()
+            if not validation_result.is_valid:
+                print(f"✗ Invalid workflow file: {file_path}")
+                if validation_result.structure_errors:
+                    for error in validation_result.structure_errors:
+                        print(f"  - {error}")
+                if validation_result.node_errors:
+                    for node_id, errors in validation_result.node_errors.items():
+                        print(f"  {node_id}: {'; '.join(errors)}")
+                if validation_result.graph_errors:
+                    for error in validation_result.graph_errors:
+                        print(f"  - {error}")
+                return False
+            
+            # Only create AI action if DSL is valid
+            self.ai_action = AiWorkflowAction(api_key, dsl_file)
             self.current_file = file_path
 
             # Show workflow info
-            info = dsl_file.get_workflow_info()
-            print(f"✓ Loaded: {file_path}")
+            info = self.ai_action.dsl_file.get_workflow_info()
+            print(f"✓ Loaded and validated: {file_path}")
             print(f"  App: {info.app_name}")
             print(f"  Description: {info.description[:50]}{'...' if len(info.description) > 50 else ''}")
             print(f"  Nodes: {info.node_count}, Edges: {info.edge_count}")
@@ -52,7 +84,7 @@ class CLI:
                 print(f"  Types: {types_str}")
 
             # Check if linear (AI compatibility)
-            linearity_check = dsl_file.is_linear_workflow()
+            linearity_check = self.ai_action.dsl_file.is_linear_workflow()
             if linearity_check.is_linear:
                 print("  ✓ Linear workflow (AI generation supported)")
             else:
@@ -84,39 +116,6 @@ class CLI:
             print(f"✗ Failed to save: {e}")
             return False
 
-    def cmd_validate(self) -> bool:
-        """Validate the workflow"""
-        if not self.ai_action:
-            print("✗ No workflow loaded")
-            return False
-
-        validation_result = self.ai_action.dsl_file.validate_workflow()
-
-        print("\n=== Validation Results ===")
-
-        if validation_result.structure_errors:
-            print("Structure errors:")
-            for error in validation_result.structure_errors:
-                print(f"  - {error}")
-
-        if validation_result.node_errors:
-            print("Node errors:")
-            for node_id, errors in validation_result.node_errors.items():
-                print(f"  {node_id}:")
-                for error in errors:
-                    print(f"    - {error}")
-
-        if validation_result.graph_errors:
-            print("Graph errors:")
-            for error in validation_result.graph_errors:
-                print(f"  - {error}")
-
-        if validation_result.is_valid:
-            print("✓ Workflow is valid!")
-        else:
-            print("✗ Workflow has errors")
-
-        return validation_result.is_valid
 
     def cmd_nodes(self) -> None:
         """List all nodes"""
@@ -166,65 +165,7 @@ class CLI:
             print(f"✗ Generation failed: {e}")
             return None
 
-    def cmd_auto_next(self, node_type: Optional[str] = None) -> Optional[str]:
-        """AI auto-generate and add the next most suitable node"""
-        if not self.ai_action:
-            print("✗ No workflow loaded")
-            return None
 
-        try:
-            # Get analysis to show user what's happening
-            if not node_type:
-                analysis = self.ai_action.analyze_workflow()
-                completion_analysis = analysis.get("completion_analysis", {})
-                
-                if completion_analysis.get("is_complete", False):
-                    print("✓ Workflow appears to be complete")
-                    return None
-                
-                last_node = completion_analysis.get("last_node", {})
-                recommendations = completion_analysis.get("recommendations", [])
-                
-                print(f"\n🤖 Analyzing workflow ending at: {last_node.get('id')} ({last_node.get('type')})")
-                
-                if recommendations:
-                    print(f"Recommended node types: {', '.join(recommendations)}")
-                    node_type = recommendations[0]
-                    print(f"Using: {node_type}")
-                else:
-                    print("✗ No suitable node type recommendations")
-                    return None
-
-            # Use the AI action's auto-generation
-            node_id = self.ai_action.auto_generate_next_node(node_type)
-            
-            if node_id:
-                print(f"✓ Added node: {node_id}")
-                return node_id
-            else:
-                print("✗ Failed to generate next node")
-                return None
-
-        except Exception as e:
-            print(f"✗ Auto-generation failed: {e}")
-            return None
-
-    def cmd_remove(self, node_id: str) -> bool:
-        """Remove a node"""
-        if not self.ai_action:
-            print("✗ No workflow loaded")
-            return False
-
-        try:
-            if self.ai_action.dsl_file.remove_node(node_id):
-                print(f"✓ Removed node: {node_id}")
-                return True
-            else:
-                print(f"✗ Node not found: {node_id}")
-                return False
-        except Exception as e:
-            print(f"✗ Failed to remove node: {e}")
-            return False
 
     def interactive_mode(self):
         """Run interactive command loop"""
@@ -254,24 +195,16 @@ class CLI:
                     self.cmd_load(parts[1])
 
                 elif cmd == 'save':
-                    path = parts[1] if len(parts) > 1 else None
-                    self.cmd_save(path)
-
-                elif cmd == 'validate':
-                    self.cmd_validate()
+                    if len(parts) > 1:
+                        self.cmd_save(parts[1])
+                    else:
+                        print("Usage: save <file_path>")
 
                 elif cmd == 'nodes':
                     self.cmd_nodes()
 
-                elif cmd == 'generate' and len(parts) >= 3:
-                    self.cmd_generate(parts[1], parts[2])
-
-                elif cmd == 'remove' and len(parts) > 1:
-                    self.cmd_remove(parts[1])
-
-                elif cmd in ['auto-next', 'auto_next', 'auto']:
-                    node_type = parts[1] if len(parts) > 1 else None
-                    self.cmd_auto_next(node_type)
+                elif cmd == 'generate' and len(parts) >= 4 and parts[1] == 'after':
+                    self.cmd_generate(parts[2], parts[3])
 
                 else:
                     print(f"Unknown command: {command}")
@@ -354,29 +287,19 @@ class CLI:
         """Show help message"""
         print("""
 Commands:
-  load <file>              - Load workflow file
-  save [file]              - Save workflow (optional: new file)
-  validate                 - Validate workflow
-  validate-resources       - Validate all DSL files in resources and write report if any errors
-  nodes                    - List all nodes
-  generate <after> <type>  - Generate and add node using AI
-  auto-next [type]         - 🚀 AI auto-generate next suitable node
-  remove <node_id>         - Remove a node
+  load <file_path>         - Load and validate workflow file
+  save <file_path>         - Save workflow to file
+  nodes                    - List all nodes in workflow
+  generate after <node_id> <node_type> - Generate and add node using AI
   help                     - Show this help
   exit                     - Quit
 
-MVP Examples (Real workflow editing):
+Examples:
   load resources/SimpleDsl.yml
-  nodes                    # View current workflow
-  auto-next                # AI generates best next node automatically
-  auto-next code           # Force generate specific node type
-  validate                 # Check workflow integrity
-  validate-resources       # Validate all sample DSLs and generate report if needed
-  save enhanced.yml        # Save with new node
-
-Traditional Examples:
-  generate start llm       # Generate after specific node
-  generate llm-1 code      # Generate code node after llm-1
+  nodes
+  generate after start llm
+  generate after llm-1 code
+  save enhanced.yml
 """)
 
 
@@ -387,37 +310,21 @@ def main():
     )
 
     parser.add_argument('file', nargs='?', help='Workflow file to load')
-    parser.add_argument('--generate', nargs=2, metavar=('AFTER', 'TYPE'),
-                       help='Generate node after specified node')
-    parser.add_argument('--validate', action='store_true',
-                       help='Validate workflow and exit')
     parser.add_argument('--validate-resources', action='store_true',
                        help='Validate all DSL files in resources and write report if any errors')
-    parser.add_argument('--output', '-o', help='Output file for save')
 
     args = parser.parse_args()
 
     cli = CLI()
 
-    # Load file if provided
-    if args.file:
-        if not cli.cmd_load(args.file):
-            return 1
-
     # Execute single command if provided
-    if args.validate:
-        return 0 if cli.cmd_validate() else 1
-
     if args.validate_resources:
         return 0 if cli.cmd_validate_resources() else 1
 
-    if args.generate:
-        after_node, node_type = args.generate
-        if not cli.cmd_generate(after_node, node_type):
+    # Load file if provided, then enter interactive mode
+    if args.file:
+        if not cli.cmd_load(args.file):
             return 1
-        if args.output:
-            cli.cmd_save(args.output)
-        return 0
 
     # Enter interactive mode
     cli.interactive_mode()

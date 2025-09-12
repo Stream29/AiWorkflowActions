@@ -5,22 +5,13 @@ Manages Anthropic API resources and advanced workflow manipulation
 """
 
 import json
-import os
 from typing import Dict, Any, Optional, List
-from pathlib import Path
 
 from anthropic import Anthropic
-from dotenv import load_dotenv
 
 from .dsl_file import DifyWorkflowDslFile
 from .context_builder import DifyWorkflowContextBuilder
 from .models import WorkflowContext, NodeValidationResult, LinearityCheck
-
-# Load environment variables from project root
-project_root = Path(__file__).parent.parent.parent
-env_path = project_root / '.env'
-if env_path.exists():
-    load_dotenv(env_path)
 
 
 class AiWorkflowAction:
@@ -30,20 +21,21 @@ class AiWorkflowAction:
     Uses DifyWorkflowDslFile for basic operations and DifyWorkflowContextBuilder for AI context
     """
     
-    def __init__(self, dsl_file: Optional[DifyWorkflowDslFile] = None):
+    def __init__(self, 
+                 api_key: str,
+                 dsl_file: Optional[DifyWorkflowDslFile] = None,
+                 model: str = "claude-sonnet-4-20250520"):
         """
-        Initialize AI workflow action with optional DSL file
+        Initialize AI workflow action
         
         Args:
+            api_key: Anthropic API key
             dsl_file: Optional workflow file to work with
+            model: Claude model to use for generation
         """
         # Initialize AI resources (RAII pattern for API client)
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not found in environment variables")
-        
         self.client = Anthropic(api_key=api_key)
-        self.model = "claude-sonnet-4-20250520"
+        self.model = model
         
         # Initialize workflow components
         self.dsl_file = dsl_file
@@ -272,52 +264,6 @@ class AiWorkflowAction:
                 "limitations": linearity_check.error_message if not linearity_check.is_linear else None
             }
         }
-    
-    def suggest_improvements(self) -> List[Dict[str, Any]]:
-        """
-        Generate AI-powered suggestions for workflow improvements
-        
-        Returns:
-            List of improvement suggestions
-        """
-        if not self.is_workflow_loaded:
-            raise ValueError("No workflow loaded")
-        
-        suggestions = []
-        
-        # Analyze current state
-        analysis = self.analyze_workflow()
-        
-        # Check for common issues
-        if not analysis["validation"]["is_valid"]:
-            suggestions.append({
-                "type": "validation",
-                "priority": "high",
-                "title": "Fix validation errors",
-                "description": "The workflow has validation errors that should be resolved."
-            })
-        
-        if not analysis["ai_compatibility"]["is_linear"]:
-            suggestions.append({
-                "type": "structure",
-                "priority": "medium", 
-                "title": "Consider workflow linearity",
-                "description": "Non-linear workflows don't support AI generation features."
-            })
-        
-        # Check for completion
-        completion_analysis = analysis["completion_analysis"]
-        if not completion_analysis.get("is_complete", False):
-            recommendations = completion_analysis.get("recommendations", [])
-            if recommendations:
-                suggestions.append({
-                    "type": "completion",
-                    "priority": "low",
-                    "title": f"Add {recommendations[0]} node",
-                    "description": f"Consider adding a {recommendations[0]} node to continue the workflow."
-                })
-        
-        return suggestions
     
     # === Private AI Methods ===
     
