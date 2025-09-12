@@ -1,0 +1,6 @@
+[submodule "resources/dify"]
+	path = resources/dify
+	url = git@github.com:langgenius/dify.git
+[submodule "resources/Awesome-Dify-Workflow"]
+	path = resources/Awesome-Dify-Workflow
+	url = git@github.com:svcvit/Awesome-Dify-Workflow.git

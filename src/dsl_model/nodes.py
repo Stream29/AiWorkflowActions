@@ -110,14 +110,50 @@ class HTTPRequestNodeData(BaseNodeData):
         type: Literal["no-auth", "api-key", "bearer-token"] = "no-auth"
         config: Optional[Dict[str, str]] = None
 
-    # Removed type field to match dify/api
-    method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"] = "GET"
+    # Align with Dify: allow HEAD and case-insensitive methods; be more permissive on shapes
+    method: str = "GET"
     url: str = Field(min_length=1, description="Request URL")
-    headers: Dict[str, str] = Field(default_factory=dict)
-    params: Dict[str, str] = Field(default_factory=dict)
+    headers: Dict[str, Any] = Field(default_factory=dict)
+    params: Dict[str, Any] = Field(default_factory=dict)
     body: Optional[Dict[str, Any]] = None
     authorization: Authorization = Field(default_factory=Authorization)
     timeout: int = Field(default=30, ge=1, le=300)
+
+    @field_validator('method', mode='before')
+    @classmethod
+    def normalize_method(cls, v):
+        if v is None:
+            return "GET"
+        if isinstance(v, str):
+            v2 = v.strip().upper()
+            allowed = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"}
+            return v2 if v2 in allowed else v2
+        return v
+
+    @field_validator('headers', 'params', mode='before')
+    @classmethod
+    def coerce_mapping(cls, v):
+        if v in (None, "", []):
+            return {}
+        if isinstance(v, list):
+            # Convert list of {key:..., value:...} or [ [k,v], ... ] to dict
+            out: Dict[str, Any] = {}
+            for item in v:
+                if isinstance(item, dict):
+                    k = item.get('key') or item.get('name') or item.get('k')
+                    if k is not None:
+                        out[str(k)] = item.get('value')
+                elif isinstance(item, (list, tuple)) and len(item) == 2:
+                    out[str(item[0])] = item[1]
+            return out or v
+        return v
+
+    @field_validator('timeout', mode='before')
+    @classmethod
+    def coerce_timeout(cls, v):
+        if isinstance(v, str) and v.strip().isdigit():
+            return int(v)
+        return v
 
     @field_validator('url')
     @classmethod
@@ -125,6 +161,8 @@ class HTTPRequestNodeData(BaseNodeData):
         if not v.startswith(('http://', 'https://', '{{')):
             raise ValueError('URL must be a valid HTTP(S) URL or template variable')
         return v
+
+    model_config = ConfigDict(extra="allow")
 
 
 class ToolNodeData(BaseNodeData):
@@ -191,9 +229,24 @@ class TemplateTransformNodeData(BaseNodeData):
 class VariableAssignerNodeData(BaseNodeData):
     """Variable assigner node"""
     type: Literal["assigner", "variable-assigner"] = Field(default="assigner")
-    assigned_variable_selector: List[str] = Field(min_items=1)
-    input_variable_selector: List[str] = Field(min_items=1)
+    assigned_variable_selector: Optional[List[str]] = None
+    input_variable_selector: Optional[List[str]] = None
     write_mode: Literal["over-write", "append", "clear"] = "over-write"
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_alt_keys(cls, data: Any):
+        if isinstance(data, dict):
+            # Accept alternative field names used in some DSLs
+            if 'assigned_variable_selector' not in data and 'assigned_variable' in data:
+                v = data.get('assigned_variable')
+                data['assigned_variable_selector'] = v if isinstance(v, list) else [str(v)] if v is not None else None
+            if 'input_variable_selector' not in data and 'input_variable' in data:
+                v = data.get('input_variable')
+                data['input_variable_selector'] = v if isinstance(v, list) else [str(v)] if v is not None else None
+        return data
+
+    model_config = ConfigDict(extra="allow")
 
 
 class KnowledgeRetrievalNodeData(BaseNodeData):
@@ -209,9 +262,12 @@ class KnowledgeRetrievalNodeData(BaseNodeData):
 class AgentNodeData(BaseNodeData):
     """Agent node - intelligent agent interaction"""
     type: Literal["agent"] = Field(default="agent")
-    agent_strategy: str = Field(min_length=1)
+    # Make strategy optional to align with Dify DSL variants where strategy metadata is split
+    agent_strategy: Optional[str] = None
     agent_parameters: Dict[str, Any] = Field(default_factory=dict)
     output_schema: Optional[Dict[str, Any]] = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class IterationNodeData(BaseNodeData):
@@ -234,6 +290,33 @@ class QuestionClassifierNodeData(BaseNodeData):
     type: Literal["question-classifier"] = Field(default="question-classifier")
     query_variable_selector: List[str] = Field(min_items=1)
     classes: List[Dict[str, Any]] = Field(min_items=2)
+
+
+class IterationStartNodeData(BaseNodeData):
+    """Iteration start pseudo node used by Dify to mark loop entry"""
+    type: Literal["iteration-start"] = Field(default="iteration-start")
+    model_config = ConfigDict(extra="allow")
+
+
+class LoopStartNodeData(BaseNodeData):
+    """Loop start pseudo node"""
+    type: Literal["loop-start"] = Field(default="loop-start")
+    model_config = ConfigDict(extra="allow")
+
+
+class LoopEndNodeData(BaseNodeData):
+    """Loop end pseudo node"""
+    type: Literal["loop-end"] = Field(default="loop-end")
+    model_config = ConfigDict(extra="allow")
+
+
+class VariableAggregatorNodeData(BaseNodeData):
+    """Variable aggregator node - aggregate values across iterations or lists"""
+    type: Literal["variable-aggregator"] = Field(default="variable-aggregator")
+    # Keep permissive; different DSLs use various shapes
+    aggregator: Optional[str] = None
+    source_selector: Optional[List[str]] = None
+    model_config = ConfigDict(extra="allow")
 
 
 # For DSL compatibility, use a flexible base type with model_rebuild
@@ -262,6 +345,10 @@ NodeData = Annotated[
         KnowledgeRetrievalNodeData,
         AgentNodeData,
         IterationNodeData,
+        IterationStartNodeData,
+        LoopStartNodeData,
+        LoopEndNodeData,
+        VariableAggregatorNodeData,
         ParameterExtractorNodeData,
         QuestionClassifierNodeData,
     ],
