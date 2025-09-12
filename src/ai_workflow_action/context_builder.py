@@ -1,24 +1,42 @@
 """
 Simple linear workflow context builder
 Extracts linear node sequences for AI generation
+Now supports DifyWorkflowDSL Pydantic models for strong typing.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
+
+from dsl_model import DifyWorkflowDSL, Node
 
 
 class ContextBuilder:
     """Build simple linear context from workflow for AI generation"""
     
-    def extract_linear_sequence(self, workflow_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _extract_nodes_edges(self, workflow: Union[DifyWorkflowDSL, Dict[str, Any]]):
+        """Helper to get nodes and edges from either DSL model or legacy dict.
+        Returns tuple (nodes_list, edges_list) where items are dicts for compatibility.
+        """
+        if isinstance(workflow, DifyWorkflowDSL):
+            nodes = [n.model_dump() for n in workflow.workflow.graph.nodes]
+            edges = [e.model_dump() for e in workflow.workflow.graph.edges]
+            app = workflow.app.model_dump()
+        elif isinstance(workflow, dict):
+            nodes = workflow.get('workflow', {}).get('graph', {}).get('nodes', [])
+            edges = workflow.get('workflow', {}).get('graph', {}).get('edges', [])
+            app = workflow.get('app', {})
+        else:
+            raise TypeError("workflow must be DifyWorkflowDSL or dict")
+        return nodes, edges, app
+    
+    def extract_linear_sequence(self, workflow: Union[DifyWorkflowDSL, Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Extract nodes in linear execution order from start to end
         Returns list of nodes with their data
         """
-        nodes = workflow_data.get('workflow', {}).get('graph', {}).get('nodes', [])
-        edges = workflow_data.get('workflow', {}).get('graph', {}).get('edges', [])
+        nodes, edges, _ = self._extract_nodes_edges(workflow)
         
-        # Build adjacency map
-        adjacency = {}
+        # Build adjacency map (assume at most one outgoing in linear flows)
+        adjacency: Dict[str, str] = {}
         for edge in edges:
             adjacency[edge['source']] = edge['target']
         
@@ -33,7 +51,7 @@ class ContextBuilder:
             raise ValueError("No start node found in workflow")
         
         # Follow the linear path
-        sequence = []
+        sequence: List[Dict[str, Any]] = []
         current_id = start_node.get('id')
         visited = set()
         
@@ -56,20 +74,20 @@ class ContextBuilder:
         
         return sequence
     
-    def build_context(self, workflow_data: Dict[str, Any], 
+    def build_context(self, workflow: Union[DifyWorkflowDSL, Dict[str, Any]], 
                      target_position: Optional[str] = None) -> Dict[str, Any]:
         """
         Build context for AI generation
         
         Args:
-            workflow_data: The workflow data
+            workflow: The workflow data (DifyWorkflowDSL or raw dict)
             target_position: Node ID after which to insert (None = end)
         
         Returns:
             Context dictionary with app info and node sequence
         """
         # Extract linear sequence
-        full_sequence = self.extract_linear_sequence(workflow_data)
+        full_sequence = self.extract_linear_sequence(workflow)
         
         # If target_position specified, truncate sequence
         if target_position:
@@ -82,11 +100,21 @@ class ContextBuilder:
         else:
             node_sequence = full_sequence
         
+        # Gather app info
+        if isinstance(workflow, DifyWorkflowDSL):
+            app_name = workflow.app.name
+            description = workflow.app.description
+            mode = workflow.app.mode
+        else:
+            app_name = workflow.get('app', {}).get('name', 'Unknown')
+            description = workflow.get('app', {}).get('description', '')
+            mode = workflow.get('app', {}).get('mode', 'workflow')
+        
         # Build context
         context = {
-            'app_name': workflow_data.get('app', {}).get('name', 'Unknown'),
-            'description': workflow_data.get('app', {}).get('description', ''),
-            'mode': workflow_data.get('app', {}).get('mode', 'workflow'),
+            'app_name': app_name,
+            'description': description,
+            'mode': mode,
             'node_sequence': node_sequence
         }
         

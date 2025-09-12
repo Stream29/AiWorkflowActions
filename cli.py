@@ -158,9 +158,10 @@ class CLI:
         try:
             print(f"\n🤖 Generating {node_type} node after {after_node_id}...")
 
-            # Build context
+            # Build context (prefer DSL model if available)
+            workflow_input = self.workflow.dsl if getattr(self.workflow, 'dsl', None) is not None else self.workflow.workflow_data
             context = self.context_builder.build_context(
-                self.workflow.workflow_data,
+                workflow_input,
                 target_position=after_node_id
             )
 
