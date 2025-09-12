@@ -28,6 +28,8 @@ uv add <package>
 
 只要有可能就不要使用`Any`和`Dict`。
 
+严禁在任何地方使用`has_attr`和`getattr`。
+
 尽可能使用pydantic model。
 
 ## 架构设计
