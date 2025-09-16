@@ -14,7 +14,7 @@ from .ai_workflow_action import AiWorkflowAction
 
 # Shared models
 from .models import (
-    NodeConnection, NodeInfo, WorkflowInfo, ValidationError,
+    NodeConnection, NodeInfo, WorkflowInfo,
     NodeValidationResult, WorkflowValidationResult, LinearityCheck,
     WorkflowContext, GenerationResult, DSLValidationReport,
     DSLValidationSummary, CLICommand, NodeRecommendation,
@@ -31,7 +31,7 @@ __all__ = [
     'AiWorkflowAction',
     
     # Shared models
-    'NodeConnection', 'NodeInfo', 'WorkflowInfo', 'ValidationError',
+    'NodeConnection', 'NodeInfo', 'WorkflowInfo',
     'NodeValidationResult', 'WorkflowValidationResult', 'LinearityCheck',
     'WorkflowContext', 'GenerationResult', 'DSLValidationReport',
     'DSLValidationSummary', 'CLICommand', 'NodeRecommendation',
