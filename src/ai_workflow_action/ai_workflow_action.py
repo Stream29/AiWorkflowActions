@@ -14,7 +14,7 @@ class AiWorkflowAction:
             self,
             api_key: str,
             dsl_file: DifyWorkflowDslFile,
-            model: str = "claude-sonnet-4-20250520"
+            model: str = "claude-sonnet-4-20250514"
     ):
         """
         Initialize AI workflow action

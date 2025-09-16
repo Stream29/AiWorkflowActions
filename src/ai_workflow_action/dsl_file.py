@@ -125,7 +125,7 @@ class DifyWorkflowDslFile:
 
     def _generate_node_id(self, node_type: str) -> str:
         """Generate a unique node ID in Dify format (timestamp-based)"""
-        existing_ids = {node.id for node in self.nodes}
+        existing_ids = {node.id for node in self.dsl.workflow.graph.nodes}
         for _ in range(100):  # Max attempts
             timestamp = int(time.time() * 1000)  # Milliseconds
             random_suffix = random.randint(100, 999)

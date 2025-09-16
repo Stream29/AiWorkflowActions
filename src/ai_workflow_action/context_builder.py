@@ -10,7 +10,6 @@ from typing import Dict, List, Optional, Type
 
 from pydantic import BaseModel
 
-from dsl_model.enums import NodeType
 from .dsl_file import DifyWorkflowDslFile
 from .models import WorkflowContext, NodeInfo, TopologyNodeData, NodeOutputInfo
 
@@ -59,8 +58,8 @@ class DifyWorkflowContextBuilder:
         node_info_sequence = [
             NodeInfo(
                 id=node.id,
-                title=node.data.get('title', 'Untitled'),
-                type=node.data.get('type', 'unknown'),
+                title=node.data.title,
+                type=node.data.type,
                 data=node.data,
                 successor_nodes=node.successor_nodes,
                 predecessor_nodes=node.predecessor_nodes
@@ -88,26 +87,13 @@ class DifyWorkflowContextBuilder:
         # Extract node data with outputs for variable reference using typed models
         node_output_sequence: List[NodeOutputInfo] = []
         for node in context.node_sequence:
-            # Add common outputs for variable reference
-            outputs: Optional[List[str]] = None
-            if node.type == NodeType.START:
-                outputs = [v.get('variable') for v in node.data.get('variables', []) if v.get('variable')]
-            elif node.type == NodeType.CODE:
-                outputs = list(node.data.get('outputs', {}).keys())
-            elif node.type == NodeType.LLM:
-                outputs = ['text']
-            elif node.type == NodeType.HTTP_REQUEST:
-                outputs = ['body', 'status_code']
-            elif node.type == NodeType.PARAMETER_EXTRACTOR:
-                outputs = [p.get('name') for p in node.data.get('parameters', []) if p.get('name')]
-
             node_output_info = NodeOutputInfo(
                 id=node.id,
                 type=node.type,
                 title=node.title,
                 successors=node.successor_nodes,
                 predecessors=node.predecessor_nodes,
-                outputs=outputs
+                outputs=[]
             )
             node_output_sequence.append(node_output_info)
 
@@ -207,7 +193,7 @@ Reference outputs using: {{{{#node_id.variable#}}}}"""
             for neighbor in adjacency.get(current_id, []):
                 in_degree[neighbor] -= 1
                 if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
+                    queue.appendleft(neighbor)
 
         # Check for cycles
         if len(result) != len(nodes):
