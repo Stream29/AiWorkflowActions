@@ -77,7 +77,7 @@ class CLI:
 
         for i, node in enumerate(nodes, 1):
             node_type = node.data.type
-            node_title = self.ai_action.dsl_file.get_node(node.id).title
+            node_title = self.ai_action.dsl_file.get_node(node.id).data.title
             conn_info = []
             for successor in node.successor_nodes:
                 conn_info.append(f"→ {successor}")

@@ -32,7 +32,6 @@ class Node(BaseModel):
     id: str = Field(min_length=1)
     data: NodeData
     position: Position
-    title: Optional[str] = Field(default=None)
     positionAbsolute: Position
     height: int = Field(default=89, ge=1)
     width: int = Field(default=244, ge=1)
