@@ -49,7 +49,7 @@ class DifyWorkflowContextBuilder:
             truncated_sequence = []
             for node in full_sequence:
                 truncated_sequence.append(node)
-                if node['id'] == target_position:
+                if node.id == target_position:
                     break
             node_sequence = truncated_sequence
         else:
