@@ -1,4 +1,4 @@
-from typing import Optional, List, Type
+from typing import Type
 
 from anthropic import Anthropic
 
@@ -35,14 +35,13 @@ class AiWorkflowAction:
             self,
             after_node_id: str,
             node_type: NodeType,
-    ) -> Optional[str]:
+    ) -> str:
         """
         Generate and add a new node using AI
         
         Args:
             after_node_id: Node ID after which to insert the new node
             node_type: Type of node to generate
-            max_attempts: Maximum number of generation attempts
         
         Returns:
             New node ID if successful, None otherwise
