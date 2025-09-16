@@ -26,7 +26,6 @@ class NodeType(StrEnum):
     DOCUMENT_EXTRACTOR = "document-extractor"
     LIST_OPERATOR = "list-operator"
     AGENT = "agent"
-    # CUSTOM = "custom"  # Deprecated - not supported in dify/api
 
 
 class VariableType(StrEnum):
