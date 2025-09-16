@@ -1,6 +1,6 @@
 from typing import Type, Mapping
 
-from dsl_model import NodeType
+from dsl_model import NodeType, BaseNodeData
 from dsl_model.nodes import (
     StartNodeData,
     EndNodeData,
@@ -24,10 +24,9 @@ from dsl_model.nodes import (
     DocumentExtractorNodeData,
     ListOperatorNodeData,
     NoteNodeData,
-    NodeData,
 )
 
-_node_enum_to_models: Mapping[NodeType, Type[NodeData]] = {
+_node_enum_to_models: Mapping[NodeType, Type[BaseNodeData]] = {
     NodeType.START: StartNodeData,
     NodeType.END: EndNodeData,
     NodeType.ANSWER: AnswerNodeData,
@@ -56,5 +55,5 @@ _node_enum_to_models: Mapping[NodeType, Type[NodeData]] = {
 
 class NodeTypeUtil:
     @staticmethod
-    def get_node_data_model(node_type: NodeType) -> Type[NodeData]:
+    def get_node_data_model(node_type: NodeType) -> Type[BaseNodeData]:
         return _node_enum_to_models[node_type]
