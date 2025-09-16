@@ -20,7 +20,9 @@ class NodeInfo(BaseModel):
     title: str = Field(description="Node display title")
     type: str = Field(description="Node type")
     data: Dict[str, Any] = Field(description="Node data payload")
-    connections: Optional[NodeConnection] = Field(default=None, description="Node connections")
+    successor_nodes: List[str] = Field(default_factory=list, description="Successor node IDs (outgoing edges)")
+    predecessor_nodes: List[str] = Field(default_factory=list, description="Predecessor node IDs (incoming edges)")
+    connections: Optional[NodeConnection] = Field(default=None, description="Node connections (deprecated - use successor/predecessor)")
 
 
 class WorkflowInfo(BaseModel):

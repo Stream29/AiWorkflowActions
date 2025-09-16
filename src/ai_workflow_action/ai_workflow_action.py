@@ -141,13 +141,13 @@ class AiWorkflowAction:
         # All attempts failed
         return None
     
-    def auto_generate_next_node(self, node_type: Optional[str] = None) -> Optional[str]:
+    def auto_generate_next_node(self, node_type: str) -> Optional[str]:
         """
         Automatically generate and add the next most suitable node
-        
+
         Args:
-            node_type: Optional specific node type to generate
-        
+            node_type: Specific node type to generate
+
         Returns:
             New node ID if successful, None otherwise
         """
@@ -172,16 +172,6 @@ class AiWorkflowAction:
         terminal_id = terminal_node['id']
         terminal_type = terminal_node.get('data', {}).get('type')
         
-        # Get recommended node types if none specified
-        if not node_type:
-            context = self.context_builder.build_context(self.dsl_file)
-            analysis = self.context_builder.analyze_workflow_completion(context)
-            
-            recommended_types = analysis.get('recommendations', [])
-            if not recommended_types:
-                return None
-            
-            node_type = recommended_types[0]  # Use first recommendation
         
         # Generate and add the node
         return self.generate_node(terminal_id, node_type)
