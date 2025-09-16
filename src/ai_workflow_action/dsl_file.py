@@ -34,8 +34,8 @@ class DifyWorkflowDslFile:
     def save(self, file_path: str):
         """Save workflow to YAML file (serialized from DSL model)"""
         with open(file_path, 'w', encoding='utf-8') as f:
-            yaml.dump(
-                data=self.dsl.model_dump(),
+            yaml.safe_dump(
+                data=self.dsl.model_dump(mode='json'),
                 stream=f,
                 default_flow_style=False,
                 allow_unicode=True,
