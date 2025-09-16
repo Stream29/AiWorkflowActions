@@ -5,13 +5,16 @@ Manages Anthropic API resources and advanced workflow manipulation
 """
 
 import json
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Type
+from pydantic import BaseModel
 
 from anthropic import Anthropic
+from pydantic import ValidationError
 
 from .dsl_file import DifyWorkflowDslFile
 from .context_builder import DifyWorkflowContextBuilder
 from .models import WorkflowContext, NodeValidationResult, LinearityCheck
+from dsl_model import NodeData
 
 
 class AiWorkflowAction:
@@ -100,40 +103,26 @@ class AiWorkflowAction:
             target_position=after_node_id
         )
         
-        # Get schema for the node type
-        schema = self.dsl_file.get_node_schema(node_type)
+        # Get model class for the node type
+        node_model_class = self.dsl_file.get_node_model_class(node_type)
         
         # Generate with retry on validation failure
         previous_errors = None
         for attempt in range(max_attempts):
             try:
                 # Generate node data using AI
-                node_data = self._generate_node_data(
-                    node_type, context, schema, previous_errors
+                node_data_obj = self._generate_node_data(
+                    node_type, context, node_model_class, previous_errors
                 )
                 
-                # Validate generated data
-                validation_result = self.dsl_file.validate_node_data(node_type, node_data)
-                
-                if validation_result.is_valid:
-                    # Create full node structure
-                    new_node = {
-                        'data': {
-                            'type': node_type,
-                            **node_data
-                        },
-                        'type': 'custom',
-                        'selected': False,
-                        'sourcePosition': 'right',
-                        'targetPosition': 'left'
-                    }
-                    
-                    # Add to workflow
-                    node_id = self.dsl_file.add_node_after(after_node_id, new_node)
-                    return node_id
-                else:
-                    # Store errors for next attempt
-                    previous_errors = validation_result.errors
+                # Create complete NodeData and add to workflow
+                from dsl_model.nodes import NodeData
+                complete_node_data = {'type': node_type, **node_data_obj.model_dump()} if hasattr(node_data_obj, 'model_dump') else {'type': node_type, **node_data_obj}
+                final_node_data = NodeData.model_validate(complete_node_data)
+
+                # Add to workflow
+                node_id = self.dsl_file.add_node_after(after_node_id, final_node_data)
+                return node_id
                     
             except Exception as e:
                 previous_errors = [str(e)]
@@ -169,8 +158,8 @@ class AiWorkflowAction:
             pass
         
         terminal_node = terminal_nodes[0]
-        terminal_id = terminal_node['id']
-        terminal_type = terminal_node.get('data', {}).get('type')
+        terminal_id = terminal_node.id
+        terminal_type = terminal_node.data.type
         
         
         # Generate and add the node
@@ -196,7 +185,7 @@ class AiWorkflowAction:
         if not terminal_nodes:
             raise ValueError("No terminal nodes found in workflow")
         
-        current_terminal = terminal_nodes[0]['id']
+        current_terminal = terminal_nodes[0].id
         
         # Generate nodes in sequence
         for node_type in target_nodes:
@@ -209,74 +198,28 @@ class AiWorkflowAction:
         
         return generated_ids
     
-    # === Workflow Analysis ===
-    
-    def analyze_workflow(self) -> Dict[str, Any]:
-        """
-        Comprehensive workflow analysis using AI insights
-        
-        Returns:
-            Analysis results with recommendations and insights
-        """
-        if not self.is_workflow_loaded:
-            raise ValueError("No workflow loaded")
-        
-        context = self.context_builder.build_context(self.dsl_file)
-        workflow_info = self.dsl_file.get_workflow_info()
-        
-        # Basic analysis
-        basic_analysis = self.context_builder.analyze_workflow_completion(context)
-        
-        # Validation results
-        validation_result = self.dsl_file.validate_workflow()
-        
-        # Linearity check
-        linearity_check = self.dsl_file.is_linear_workflow()
-        
-        return {
-            "workflow_info": {
-                "app_name": workflow_info.app_name,
-                "description": workflow_info.description,
-                "node_count": workflow_info.node_count,
-                "edge_count": workflow_info.edge_count,
-                "node_types": workflow_info.node_types
-            },
-            "completion_analysis": basic_analysis,
-            "validation": {
-                "is_valid": validation_result.is_valid,
-                "has_errors": bool(validation_result.structure_errors or 
-                                 validation_result.node_errors or 
-                                 validation_result.graph_errors)
-            },
-            "ai_compatibility": {
-                "is_linear": linearity_check.is_linear,
-                "supports_ai_generation": linearity_check.is_linear,
-                "limitations": linearity_check.error_message if not linearity_check.is_linear else None
-            }
-        }
-    
     # === Private AI Methods ===
     
-    def _generate_node_data(self, 
+    def _generate_node_data(self,
                            node_type: str,
                            context: WorkflowContext,
-                           schema: Optional[Dict[str, Any]],
-                           previous_errors: Optional[List[str]]) -> Dict[str, Any]:
+                           node_model_class: Optional[Type[BaseModel]],
+                           previous_errors: Optional[List[str]]):
         """
         Generate node data using Claude API
-        
+
         Args:
             node_type: Type of node to generate
-            context: Workflow context 
-            schema: Optional JSON schema
+            context: Workflow context
+            node_model_class: Pydantic model class for validation
             previous_errors: Optional previous validation errors for retry
-        
+
         Returns:
-            Generated node data
+            Validated node data object
         """
         # Build comprehensive prompt
         prompt = self.context_builder.build_generation_prompt(
-            context, node_type, schema, previous_errors
+            context, node_type, node_model_class, previous_errors
         )
         
         try:
@@ -311,8 +254,13 @@ class AiWorkflowAction:
             
             json_content = content[start:end+1]
             
-            # Parse and return JSON
-            return json.loads(json_content)
+            # Parse JSON and validate with model
+            raw_data = json.loads(json_content)
+            if node_model_class:
+                return node_model_class.model_validate(raw_data)
+            else:
+                # Fallback for unknown node types
+                return raw_data
             
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse generated JSON: {e}\\nContent: {content[:200] if 'content' in locals() else 'No content'}")

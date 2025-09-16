@@ -17,7 +17,7 @@ from .models import (
     NodeConnection, NodeInfo, WorkflowInfo, ValidationError,
     NodeValidationResult, WorkflowValidationResult, LinearityCheck,
     WorkflowContext, GenerationResult, DSLValidationReport,
-    DSLValidationSummary, CLICommand, CommandResult, NodeRecommendation,
+    DSLValidationSummary, CLICommand, NodeRecommendation,
     RecommendationResult
 )
 
@@ -34,6 +34,6 @@ __all__ = [
     'NodeConnection', 'NodeInfo', 'WorkflowInfo', 'ValidationError',
     'NodeValidationResult', 'WorkflowValidationResult', 'LinearityCheck',
     'WorkflowContext', 'GenerationResult', 'DSLValidationReport',
-    'DSLValidationSummary', 'CLICommand', 'CommandResult', 'NodeRecommendation',
+    'DSLValidationSummary', 'CLICommand', 'NodeRecommendation',
     'RecommendationResult'
 ]

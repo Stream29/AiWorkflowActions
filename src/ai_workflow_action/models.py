@@ -5,7 +5,7 @@ Strong typing to replace Dict[str, Any] usage throughout the codebase.
 
 from typing import List, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field
-from dsl_model import DifyWorkflowDSL, NodeType
+from dsl_model import DifyWorkflowDSL, NodeType, NodeData
 
 
 class NodeConnection(BaseModel):
@@ -19,7 +19,7 @@ class NodeInfo(BaseModel):
     id: str = Field(description="Unique node identifier")
     title: str = Field(description="Node display title")
     type: str = Field(description="Node type")
-    data: Dict[str, Any] = Field(description="Node data payload")
+    data: NodeData = Field(description="Node data payload")
     successor_nodes: List[str] = Field(default_factory=list, description="Successor node IDs (outgoing edges)")
     predecessor_nodes: List[str] = Field(default_factory=list, description="Predecessor node IDs (incoming edges)")
     connections: Optional[NodeConnection] = Field(default=None, description="Node connections (deprecated - use successor/predecessor)")
@@ -132,13 +132,6 @@ class RemoveCommand(CLICommand):
     node_id: str = Field(description="Node ID to remove")
 
 
-class CommandResult(BaseModel):
-    """Generic command execution result"""
-    success: bool = Field(description="Whether command succeeded")
-    message: str = Field(description="Result message")
-    data: Optional[Dict[str, Any]] = Field(default=None, description="Additional result data")
-
-
 class NodeRecommendation(BaseModel):
     """Node type recommendation"""
     node_type: str = Field(description="Recommended node type")
@@ -150,3 +143,22 @@ class RecommendationResult(BaseModel):
     """Result of node type recommendation"""
     recommendations: List[NodeRecommendation] = Field(description="List of recommended node types")
     selected_type: Optional[str] = Field(default=None, description="Auto-selected node type")
+
+
+class TopologyNodeData(BaseModel):
+    """Node data with topology information for context building"""
+    id: str = Field(description="Node identifier")
+    data: NodeData = Field(description="Node data payload")
+    successor_nodes: List[str] = Field(default_factory=list, description="Successor node IDs")
+    predecessor_nodes: List[str] = Field(default_factory=list, description="Predecessor node IDs")
+
+
+class NodeOutputInfo(BaseModel):
+    """Node information with outputs for prompt generation"""
+    id: str = Field(description="Node identifier")
+    type: str = Field(description="Node type")
+    title: str = Field(description="Node title")
+    successors: List[str] = Field(default_factory=list, description="Successor node IDs")
+    predecessors: List[str] = Field(default_factory=list, description="Predecessor node IDs")
+    outputs: Optional[List[str]] = Field(default=None, description="Available output variables")
+

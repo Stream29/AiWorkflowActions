@@ -6,13 +6,14 @@ Implements RAII pattern for resource management
 
 import random
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Type
+from pydantic import BaseModel
 from pathlib import Path
 
 import yaml
 from pydantic import ValidationError
 
-from dsl_model import DifyWorkflowDSL, Node, Edge, EdgeData
+from dsl_model import DifyWorkflowDSL, Node, Edge, EdgeData, NodeData, Position
 from dsl_model.enums import NodeType
 from dsl_model.nodes import (
     StartNodeData,
@@ -113,19 +114,19 @@ class DifyWorkflowDslFile:
         """Check if workflow is loaded"""
         return self.dsl is not None
     
-    @property 
-    def nodes(self) -> List[Dict[str, Any]]:
-        """Get all nodes in the workflow (as dicts for backward compatibility)"""
+    @property
+    def nodes(self) -> List[Node]:
+        """Get all nodes in the workflow"""
         if self.dsl is None:
             return []
-        return [n.model_dump() for n in self.dsl.workflow.graph.nodes]
+        return self.dsl.workflow.graph.nodes
 
     @property
-    def edges(self) -> List[Dict[str, Any]]:
-        """Get all edges in the workflow (as dicts for backward compatibility)"""
+    def edges(self) -> List[Edge]:
+        """Get all edges in the workflow"""
         if self.dsl is None:
             return []
-        return [e.model_dump() for e in self.dsl.workflow.graph.edges]
+        return self.dsl.workflow.graph.edges
     
     # === Workflow Information ===
     
@@ -144,7 +145,7 @@ class DifyWorkflowDslFile:
         # Count node types
         node_types: Dict[str, int] = {}
         for node in self.nodes:
-            node_type = node.get('data', {}).get('type', 'unknown')
+            node_type = node.data.type
             node_types[node_type] = node_types.get(node_type, 0) + 1
 
         app = self.dsl.app
@@ -159,12 +160,11 @@ class DifyWorkflowDslFile:
     
     # === Node Operations ===
     
-    def get_node(self, node_id: str) -> Optional[Dict[str, Any]]:
-        """Find a node by ID (dict view)"""
+    def get_node(self, node_id: str) -> Optional[Node]:
+        """Find a node by ID"""
         if self.dsl is None:
             return None
-        n = self._get_node_model(node_id)
-        return n.model_dump() if n else None
+        return self._get_node_model(node_id)
     
     def _get_node_model(self, node_id: str) -> Optional[Node]:
         """Get node as pydantic model"""
@@ -191,19 +191,18 @@ class DifyWorkflowDslFile:
                 
         return NodeConnection(incoming=incoming, outgoing=outgoing)
     
-    def get_terminal_nodes(self) -> List[Dict[str, Any]]:
+    def get_terminal_nodes(self) -> List[Node]:
         """Get all terminal nodes (nodes with no outgoing edges)"""
-        terminal_nodes: List[Dict[str, Any]] = []
+        terminal_nodes: List[Node] = []
         for node in self.nodes:
-            node_id = node.get('id')
-            connections = self.get_node_connections(node_id)
+            connections = self.get_node_connections(node.id)
             if not connections.outgoing:
                 terminal_nodes.append(node)
         return terminal_nodes
     
     # === Node Modification ===
     
-    def add_node_after(self, after_node_id: str, new_node: Dict[str, Any]) -> str:
+    def add_node_after(self, after_node_id: str, new_node_data: NodeData) -> str:
         """
         Add a new node after specified node
         Returns the new node's ID
@@ -213,41 +212,43 @@ class DifyWorkflowDslFile:
         if not after_node:
             raise ValueError(f"Node '{after_node_id}' not found")
 
-        # Generate unique node ID if not provided
-        node_id = new_node.get('id')
-        if not node_id:
-            node_id = self._generate_node_id(new_node['data']['type'])
-            new_node['id'] = node_id
+        # Generate unique node ID
+        node_id = self._generate_node_id(new_node_data.type)
 
-        # Set position if not provided
-        if 'position' not in new_node:
-            new_node['position'] = self._calculate_position(after_node_id)
-        # Ensure positionAbsolute for model requirements
-        if 'positionAbsolute' not in new_node:
-            new_node['positionAbsolute'] = {
-                'x': new_node['position']['x'],
-                'y': new_node['position']['y'],
-            }
+        # Calculate position for new node
+        position = self._calculate_position(after_node_id)
 
         if self.dsl is None:
             raise ValueError("No workflow loaded")
-            
-        # Validate/construct Node via Pydantic and add to model graph
-        node_model = Node.model_validate(new_node)
+
+        # Create complete Node model
+        node_model = Node(
+            id=node_id,
+            data=new_node_data,
+            position=Position(x=position['x'], y=position['y']),
+            positionAbsolute=Position(x=position['x'], y=position['y']),
+            selected=False,
+            sourcePosition='right',
+            targetPosition='left',
+            type='custom'
+        )
+
+        # Add to workflow
         self.dsl.workflow.graph.nodes.append(node_model)
+
         # Update edges in model
         self._insert_node_in_edges(after_node_id, node_id,
-                                   after_node['data']['type'],
-                                   new_node['data']['type'])
+                                   after_node.data.type,
+                                   new_node_data.type)
         return node_id
     
-    def add_node_at_end(self, new_node: Dict[str, Any]) -> str:
+    def add_node_at_end(self, new_node_data: NodeData) -> str:
         """Add a new node at the end of the workflow"""
         terminal_nodes = self.get_terminal_nodes()
         if not terminal_nodes:
             raise ValueError("No terminal nodes found in workflow")
         terminal_node = terminal_nodes[0]
-        return self.add_node_after(terminal_node['id'], new_node)
+        return self.add_node_after(terminal_node.id, new_node_data)
     
     def remove_node(self, node_id: str) -> bool:
         """Remove a node and reconnect edges"""
@@ -275,40 +276,11 @@ class DifyWorkflowDslFile:
                 target_node = self.get_node(target)
                 if source_node and target_node:
                     self._add_edge(source, target,
-                                   source_node['data']['type'],
-                                   target_node['data']['type'])
+                                   source_node.data.type,
+                                   target_node.data.type)
         return True
     
     # === Validation ===
-    
-    def validate_node_data(self, node_type: str, node_data: Dict[str, Any]) -> NodeValidationResult:
-        """
-        Validate node data against pydantic model
-        Returns: NodeValidationResult with validation status and errors
-        """
-        errors = []
-        
-        # Get the appropriate model for this node type
-        model_class = self._node_models.get(node_type)
-        
-        if not model_class:
-            # Unknown node type, allow it
-            return NodeValidationResult(node_id="", is_valid=True, errors=[])
-        
-        try:
-            # Validate using pydantic model
-            model_class(**node_data)
-            return NodeValidationResult(node_id="", is_valid=True, errors=[])
-        except ValidationError as e:
-            # Parse validation errors
-            for error in e.errors():
-                field = ' -> '.join(str(loc) for loc in error['loc'])
-                msg = error['msg']
-                errors.append(f"{field}: {msg}")
-        except Exception as e:
-            errors.append(f"Validation error: {str(e)}")
-        
-        return NodeValidationResult(node_id="", is_valid=False, errors=errors)
     
     def validate_workflow(self) -> WorkflowValidationResult:
         """
@@ -331,22 +303,7 @@ class DifyWorkflowDslFile:
         # Get workflow data for validation
         workflow_data = self.dsl.model_dump()
         
-        # Validate nodes
-        nodes = workflow_data.get('workflow', {}).get('graph', {}).get('nodes', [])
-        for node in nodes:
-            node_id = node.get('id', 'unknown')
-            node_data = node.get('data', {})
-            node_type = node_data.get('type')
-            
-            if not node_type:
-                node_errors[node_id] = ["Missing node type"]
-                is_valid = False
-                continue
-            
-            validation_result = self.validate_node_data(node_type, node_data)
-            if not validation_result.is_valid:
-                node_errors[node_id] = validation_result.errors
-                is_valid = False
+        # Node validation is now handled entirely by DifyWorkflowDSL.model_validate below
         
         # Validate by parsing full DSL using new Pydantic models
         try:
@@ -415,9 +372,13 @@ class DifyWorkflowDslFile:
         
         return LinearityCheck(is_linear=True, error_message=None)
     
+    def get_node_model_class(self, node_type: str) -> Optional[Type[BaseModel]]:
+        """Get pydantic model class for a node type"""
+        return self._node_models.get(node_type)
+
     def get_node_schema(self, node_type: str) -> Optional[Dict[str, Any]]:
         """Get JSON schema for a node type"""
-        model_class = self._node_models.get(node_type)
+        model_class = self.get_node_model_class(node_type)
         if model_class:
             return model_class.model_json_schema()
         return None
@@ -426,7 +387,7 @@ class DifyWorkflowDslFile:
     
     def _generate_node_id(self, node_type: str) -> str:
         """Generate a unique node ID in Dify format (timestamp-based)"""
-        existing_ids = {node.get('id') for node in self.nodes}
+        existing_ids = {node.id for node in self.nodes}
         for _ in range(100):  # Max attempts
             timestamp = int(time.time() * 1000)  # Milliseconds
             random_suffix = random.randint(100, 999)
@@ -443,12 +404,14 @@ class DifyWorkflowDslFile:
     def _calculate_position(self, after_node_id: str) -> Dict[str, float]:
         """Calculate position for new node"""
         after_node = self.get_node(after_node_id)
-        ref_pos = after_node.get('position', {'x': 100, 'y': 300})
+        if not after_node:
+            raise ValueError(f"Node '{after_node_id}' not found")
+        ref_pos = {'x': after_node.position.x, 'y': after_node.position.y}
         connections = self.get_node_connections(after_node_id)
         if connections.outgoing:
             next_node = self.get_node(connections.outgoing[0])
-            if next_node and 'position' in next_node:
-                next_pos = next_node['position']
+            if next_node:
+                next_pos = {'x': next_node.position.x, 'y': next_node.position.y}
                 return {
                     'x': (ref_pos['x'] + next_pos['x']) / 2,
                     'y': (ref_pos['y'] + next_pos['y']) / 2
@@ -475,7 +438,7 @@ class DifyWorkflowDslFile:
             self._add_edge(after_id, new_id, after_type, new_type)
             # Add edge from new_node to original target
             target_node = self.get_node(target_id)
-            target_type = target_node['data']['type'] if target_node else 'unknown'
+            target_type = target_node.data.type if target_node else 'unknown'
             self._add_edge(new_id, target_id, new_type, target_type)
         else:
             self._add_edge(after_id, new_id, after_type, new_type)
