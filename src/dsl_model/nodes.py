@@ -19,24 +19,24 @@ from .core import (
 
 class StartNodeData(BaseNodeData):
     """Start node - workflow entry point"""
-    type: Literal["start"] = Field(default="start")
+    type: Literal[NodeType.START] = Field(default=NodeType.START)
     variables: List[Variable] = Field(default_factory=list)
 
 
 class EndNodeData(BaseNodeData):
     """End node - workflow termination"""
-    type: Literal["end"] = Field(default="end")
+    type: Literal[NodeType.END] = Field(default=NodeType.END)
 
 
 class AnswerNodeData(BaseNodeData):
     """Answer node - provides response in chat mode"""
-    type: Literal["answer"] = Field(default="answer")
+    type: Literal[NodeType.ANSWER] = Field(default=NodeType.ANSWER)
     answer: str = Field(description="Answer template with variable substitution")
 
 
 class LLMNodeData(BaseNodeData):
     """LLM node - AI model interaction"""
-    type: Literal["llm"] = Field(default="llm")
+    type: Literal[NodeType.LLM] = Field(default=NodeType.LLM)
     model: ModelConfig
     prompt_template: Union[Sequence[LLMNodeChatModelMessage], LLMNodeCompletionModelPromptTemplate]
     prompt_config: PromptConfig = Field(default_factory=PromptConfig)
@@ -55,7 +55,7 @@ class LLMNodeData(BaseNodeData):
 
 class CodeNodeData(BaseNodeData):
     """Code node - execute Python/JavaScript code"""
-    type: Literal["code"] = Field(default="code")
+    type: Literal[NodeType.CODE] = Field(default=NodeType.CODE)
 
     class Output(BaseModel):
         """Code node output definition"""
@@ -88,7 +88,7 @@ class CodeNodeData(BaseNodeData):
 
 class HTTPRequestNodeData(BaseNodeData):
     """HTTP request node"""
-    type: Literal["http-request"] = Field(default="http-request")
+    type: Literal[NodeType.HTTP_REQUEST] = Field(default=NodeType.HTTP_REQUEST)
 
     class Authorization(BaseModel):
         """HTTP authorization configuration"""
@@ -114,7 +114,7 @@ class HTTPRequestNodeData(BaseNodeData):
 
 class ToolNodeData(BaseNodeData):
     """Tool node - external tool integration"""
-    type: Literal["tool"]
+    type: Literal[NodeType.TOOL] = Field(default=NodeType.TOOL)
 
     class ParameterSchema(BaseModel):
         """Tool parameter schema"""
@@ -134,7 +134,7 @@ class ToolNodeData(BaseNodeData):
 
 class IfElseNodeData(BaseNodeData):
     """If-else node - conditional branching"""
-    type: Literal["if-else"]
+    type: Literal[NodeType.IF_ELSE] = Field(default=NodeType.IF_ELSE)
 
     class Condition(BaseModel):
         """Single condition"""
@@ -158,14 +158,14 @@ class IfElseNodeData(BaseNodeData):
 
 class TemplateTransformNodeData(BaseNodeData):
     """Template transform node - text template processing"""
-    type: Literal["template-transform"]
+    type: Literal[NodeType.TEMPLATE_TRANSFORM] = Field(default=NodeType.TEMPLATE_TRANSFORM)
     template: str = Field(min_length=1, description="Jinja2 template")
 
 
 
 class VariableAssignerNodeData(BaseNodeData):
     """Variable assigner node"""
-    type: Literal["assigner", "variable-assigner"] = Field(default="assigner")
+    type: Literal[NodeType.VARIABLE_ASSIGNER, NodeType.LEGACY_VARIABLE_AGGREGATOR] = Field(default=NodeType.VARIABLE_ASSIGNER)
     assigned_variable_selector: Optional[List[str]] = None
     input_variable_selector: Optional[List[str]] = None
     write_mode: Literal["over-write", "append", "clear"] = "over-write"
@@ -176,7 +176,7 @@ class VariableAssignerNodeData(BaseNodeData):
 
 class KnowledgeRetrievalNodeData(BaseNodeData):
     """Knowledge retrieval node"""
-    type: Literal["knowledge-retrieval"] = Field(default="knowledge-retrieval")
+    type: Literal[NodeType.KNOWLEDGE_RETRIEVAL] = Field(default=NodeType.KNOWLEDGE_RETRIEVAL)
     dataset_ids: List[str]
     query_variable_selector: List[str]
     retrieval_mode: Literal["single", "multiple"] = "single"
@@ -186,7 +186,7 @@ class KnowledgeRetrievalNodeData(BaseNodeData):
 
 class AgentNodeData(BaseNodeData):
     """Agent node - intelligent agent interaction"""
-    type: Literal["agent"] = Field(default="agent")
+    type: Literal[NodeType.AGENT] = Field(default=NodeType.AGENT)
     agent_strategy: Optional[str] = None
     agent_parameters: Dict[str, Any] = Field(default_factory=dict)
     output_schema: Optional[Dict[str, Any]] = None
@@ -196,7 +196,7 @@ class AgentNodeData(BaseNodeData):
 
 class IterationNodeData(BaseNodeData):
     """Iteration node - loop processing"""
-    type: Literal["iteration"] = Field(default="iteration")
+    type: Literal[NodeType.ITERATION] = Field(default=NodeType.ITERATION)
     iterator_selector: List[str]
     output_selector: List[str]
     output_type: SegmentType = SegmentType.ARRAY_OBJECT
@@ -204,7 +204,7 @@ class IterationNodeData(BaseNodeData):
 
 class ParameterExtractorNodeData(BaseNodeData):
     """Parameter extractor node"""
-    type: Literal["parameter-extractor"] = Field(default="parameter-extractor")
+    type: Literal[NodeType.PARAMETER_EXTRACTOR] = Field(default=NodeType.PARAMETER_EXTRACTOR)
     query: Union[str, List[str]] = Field(description="Query string or list of query strings")
     parameters: List[Dict[str, Any]]
     model: Optional[ModelConfig] = None
@@ -215,32 +215,32 @@ class ParameterExtractorNodeData(BaseNodeData):
 
 class QuestionClassifierNodeData(BaseNodeData):
     """Question classifier node"""
-    type: Literal["question-classifier"] = Field(default="question-classifier")
+    type: Literal[NodeType.QUESTION_CLASSIFIER] = Field(default=NodeType.QUESTION_CLASSIFIER)
     query_variable_selector: List[str]
     classes: List[Dict[str, Any]]
 
 
 class IterationStartNodeData(BaseNodeData):
     """Iteration start pseudo node used by Dify to mark loop entry"""
-    type: Literal["iteration-start"] = Field(default="iteration-start")
+    type: Literal[NodeType.ITERATION_START] = Field(default=NodeType.ITERATION_START)
     model_config = ConfigDict(extra="allow")
 
 
 class LoopStartNodeData(BaseNodeData):
     """Loop start pseudo node"""
-    type: Literal["loop-start"] = Field(default="loop-start")
+    type: Literal[NodeType.LOOP_START] = Field(default=NodeType.LOOP_START)
     model_config = ConfigDict(extra="allow")
 
 
 class LoopEndNodeData(BaseNodeData):
     """Loop end pseudo node"""
-    type: Literal["loop-end"] = Field(default="loop-end")
+    type: Literal[NodeType.LOOP_END] = Field(default=NodeType.LOOP_END)
     model_config = ConfigDict(extra="allow")
 
 
 class VariableAggregatorNodeData(BaseNodeData):
     """Variable aggregator node - aggregate values across iterations or lists"""
-    type: Literal["variable-aggregator"] = Field(default="variable-aggregator")
+    type: Literal[NodeType.VARIABLE_AGGREGATOR] = Field(default=NodeType.VARIABLE_AGGREGATOR)
     # Keep permissive; different DSLs use various shapes
     aggregator: Optional[str] = None
     source_selector: Optional[List[str]] = None
@@ -249,14 +249,14 @@ class VariableAggregatorNodeData(BaseNodeData):
 
 class DocumentExtractorNodeData(BaseNodeData):
     """Document extractor node - extract text from documents"""
-    type: Literal["document-extractor"]
+    type: Literal[NodeType.DOCUMENT_EXTRACTOR] = Field(default=NodeType.DOCUMENT_EXTRACTOR)
     variable_selector: List[str]
     model_config = ConfigDict(extra="allow")
 
 
 class ListOperatorNodeData(BaseNodeData):
     """List operator node - perform operations on lists"""
-    type: Literal["list-operator"]
+    type: Literal[NodeType.LIST_OPERATOR] = Field(default=NodeType.LIST_OPERATOR)
 
     class FilterCondition(BaseModel):
         """Filter condition for list operations"""
@@ -276,7 +276,7 @@ class ListOperatorNodeData(BaseNodeData):
 
 class NoteNodeData(BaseModel):
     """Note node - annotation/comment node for workflow documentation"""
-    type: Literal[""] = Field(default="")
+    type: Literal[NodeType.NOTE] = Field(default=NodeType.NOTE)
     title: str = Field(default="")
     theme: Literal["blue", "cyan", "green", "yellow", "pink", "violet"]
     text: Optional[str] = None

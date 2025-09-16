@@ -11,6 +11,7 @@ from collections import defaultdict, deque
 
 from .dsl_file import DifyWorkflowDslFile
 from .models import WorkflowContext, NodeInfo, TopologyNodeData, NodeOutputInfo
+from dsl_model.enums import NodeType
 
 
 class DifyWorkflowContextBuilder:
@@ -99,15 +100,15 @@ class DifyWorkflowContextBuilder:
         for node in context.node_sequence:
             # Add common outputs for variable reference
             outputs: Optional[List[str]] = None
-            if node.type == 'start':
+            if node.type == NodeType.START:
                 outputs = [v.get('variable') for v in node.data.get('variables', []) if v.get('variable')]
-            elif node.type == 'code':
+            elif node.type == NodeType.CODE:
                 outputs = list(node.data.get('outputs', {}).keys())
-            elif node.type == 'llm':
+            elif node.type == NodeType.LLM:
                 outputs = ['text']
-            elif node.type == 'http-request':
+            elif node.type == NodeType.HTTP_REQUEST:
                 outputs = ['body', 'status_code']
-            elif node.type == 'parameter-extractor':
+            elif node.type == NodeType.PARAMETER_EXTRACTOR:
                 outputs = [p.get('name') for p in node.data.get('parameters', []) if p.get('name')]
 
             node_output_info = NodeOutputInfo(
