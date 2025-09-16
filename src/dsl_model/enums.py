@@ -26,6 +26,7 @@ class NodeType(StrEnum):
     DOCUMENT_EXTRACTOR = "document-extractor"
     LIST_OPERATOR = "list-operator"
     AGENT = "agent"
+    NOTE = ""  # Note/comment node with empty type value
 
 
 class VariableType(StrEnum):
