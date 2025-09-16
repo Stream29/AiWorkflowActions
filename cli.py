@@ -127,10 +127,10 @@ class CLI:
         print(f"\n=== Nodes ({len(nodes)}) ===")
 
         for i, node in enumerate(nodes, 1):
-            node_id = node.get('id')
-            node_data = node.get('data', {})
-            node_type = node_data.get('type')
-            node_title = node_data.get('title', 'Untitled')
+            node_id = node.id
+            node_data = node.data
+            node_type = node_data.type
+            node_title = getattr(node_data, 'title', 'Untitled')
 
             connections = self.ai_action.dsl_file.get_node_connections(node_id)
             conn_info = []
