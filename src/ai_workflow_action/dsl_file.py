@@ -31,12 +31,9 @@ class DifyWorkflowDslFile:
 
     # === File Operations ===
 
-    def save(self, file_path: Optional[str] = None) -> str:
+    def save(self, file_path: str):
         """Save workflow to YAML file (serialized from DSL model)"""
-        output_path = file_path or self.file_path
-        if not output_path:
-            raise ValueError("No file path specified")
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(file_path, 'w', encoding='utf-8') as f:
             yaml.dump(
                 data=self.dsl.model_dump(),
                 stream=f,
@@ -44,7 +41,6 @@ class DifyWorkflowDslFile:
                 allow_unicode=True,
                 sort_keys=False
             )
-        return output_path
 
     # === Workflow Information ===
 
