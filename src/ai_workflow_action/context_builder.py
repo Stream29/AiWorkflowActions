@@ -5,13 +5,14 @@ Simplified implementation focused on essential functionality
 """
 
 import json
-from typing import Dict, Any, List, Optional, Type
-from pydantic import BaseModel
 from collections import defaultdict, deque
+from typing import Dict, List, Optional, Type
 
+from pydantic import BaseModel
+
+from dsl_model.enums import NodeType
 from .dsl_file import DifyWorkflowDslFile
 from .models import WorkflowContext, NodeInfo, TopologyNodeData, NodeOutputInfo
-from dsl_model.enums import NodeType
 
 
 class DifyWorkflowContextBuilder:
@@ -23,10 +24,12 @@ class DifyWorkflowContextBuilder:
     def __init__(self):
         """Initialize the context builder"""
         pass
-    
-    def build_context(self, 
-                     dsl_file: DifyWorkflowDslFile, 
-                     target_position: Optional[str] = None) -> WorkflowContext:
+
+    @staticmethod
+    def build_context(
+            dsl_file: DifyWorkflowDslFile,
+            target_position: str
+    ) -> WorkflowContext:
         """
         Build context for AI generation from workflow file
         
@@ -37,12 +40,10 @@ class DifyWorkflowContextBuilder:
         Returns:
             WorkflowContext with app info and node sequence
         """
-        if not dsl_file.is_loaded:
-            raise ValueError("Workflow file is not loaded")
-        
+
         # Extract topologically sorted sequence
-        full_sequence = self._extract_topological_sequence(dsl_file)
-        
+        full_sequence = DifyWorkflowContextBuilder.extract_topological_sequence(dsl_file)
+
         # If target_position specified, truncate sequence
         if target_position:
             truncated_sequence = []
@@ -53,7 +54,7 @@ class DifyWorkflowContextBuilder:
             node_sequence = truncated_sequence
         else:
             node_sequence = full_sequence
-        
+
         # Convert to NodeInfo objects with topology information
         node_info_sequence = [
             NodeInfo(
@@ -66,10 +67,10 @@ class DifyWorkflowContextBuilder:
             )
             for node in node_sequence
         ]
-        
+
         # Get workflow info for context
         workflow_info = dsl_file.get_workflow_info()
-        
+
         # Build context
         return WorkflowContext(
             app_name=workflow_info.app_name,
@@ -77,24 +78,13 @@ class DifyWorkflowContextBuilder:
             mode=workflow_info.mode,
             node_sequence=node_info_sequence
         )
-    
-    def build_generation_prompt(self,
-                               context: WorkflowContext,
-                               target_node_type: str,
-                               node_model_class: Optional[Type[BaseModel]] = None,
-                               previous_errors: Optional[List[str]] = None) -> str:
-        """
-        Build a simplified prompt for AI node generation
 
-        Args:
-            context: The workflow context
-            target_node_type: Type of node to generate
-            node_model_class: Pydantic model class for validation
-            previous_errors: Optional list of previous validation errors for retry
-
-        Returns:
-            Prompt string for AI generation
-        """
+    @staticmethod
+    def build_generation_prompt(
+            context: WorkflowContext,
+            target_node_type: str,
+            node_model_class: Optional[Type[BaseModel]] = None,
+    ) -> str:
         # Extract node data with outputs for variable reference using typed models
         node_output_sequence: List[NodeOutputInfo] = []
         for node in context.node_sequence:
@@ -148,13 +138,6 @@ Reference outputs using: {{{{#node_id.variable#}}}}"""
             schema = node_model_class.model_json_schema()
             prompt += f"\n\n## Schema\n{json.dumps(schema, indent=2)}"
 
-        # Add error feedback
-        if previous_errors:
-            prompt += "\n\n## Previous Errors\n"
-            for error in previous_errors:
-                prompt += f"- {error}\n"
-            prompt += "Fix these issues in your response."
-
         # Final instructions
         prompt += f"""
 
@@ -166,17 +149,15 @@ Reference outputs using: {{{{#node_id.variable#}}}}"""
 5. Return ONLY the JSON object, no markdown or explanation"""
 
         return prompt
-    
-    
-    # === Private Helper Methods ===
-    
-    def _extract_topological_sequence(self, dsl_file: DifyWorkflowDslFile) -> List[TopologyNodeData]:
+
+    @staticmethod
+    def extract_topological_sequence(dsl_file: DifyWorkflowDslFile) -> List[TopologyNodeData]:
         """
         Extract nodes using topological sorting to handle complex workflows
         Returns list of nodes with their data and topology information
         """
-        nodes = dsl_file.nodes
-        edges = dsl_file.edges
+        nodes = dsl_file.dsl.workflow.graph.nodes
+        edges = dsl_file.dsl.workflow.graph.edges
 
         # Build node lookup
         node_dict = {node.id: node for node in nodes}

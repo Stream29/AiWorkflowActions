@@ -30,7 +30,6 @@ class AiWorkflowAction:
 
         # Initialize workflow components
         self.dsl_file = dsl_file
-        self.context_builder = DifyWorkflowContextBuilder()
 
     def generate_node(
             self,
@@ -48,7 +47,7 @@ class AiWorkflowAction:
         Returns:
             New node ID if successful, None otherwise
         """
-        context = self.context_builder.build_context(
+        context = DifyWorkflowContextBuilder.build_context(
             self.dsl_file,
             target_position=after_node_id
         )
@@ -66,7 +65,7 @@ class AiWorkflowAction:
             context: WorkflowContext,
             node_data_model: Type[BaseNodeData],
     ) -> BaseNodeData:
-        prompt = self.context_builder.build_generation_prompt(
+        prompt = DifyWorkflowContextBuilder.build_generation_prompt(
             context=context,
             target_node_type=node_type,
             node_model_class=node_data_model,
