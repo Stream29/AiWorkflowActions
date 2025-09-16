@@ -47,7 +47,7 @@ class DifyWorkflowDslFile:
     def get_workflow_info(self) -> WorkflowInfo:
         """Get summary information about the workflow"""
         node_types: Dict[str, int] = {}
-        for node in self.nodes:
+        for node in self.dsl.workflow.graph.nodes:
             node_type = node.data.type
             node_types[node_type] = node_types.get(node_type, 0) + 1
 
