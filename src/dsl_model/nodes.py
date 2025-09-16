@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional, Sequence, Union, Annotated
+from typing import Any, Dict, List, Literal, Optional, Sequence, Union, Annotated, Type
 
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
@@ -289,7 +289,7 @@ class NoteNodeData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 # Discriminated union of all node data types by the 'type' field
-NodeData = Annotated[
+NodeData: Type = Annotated[
     Union[
         StartNodeData,
         EndNodeData,
