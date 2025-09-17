@@ -67,3 +67,64 @@ uv add <package>
 - 为AI操作提供高质量的提示和上下文
 - 位置：`src/ai_workflow_action/context_builder.py`
 - 职责：工作流分析、上下文提取、AI提示生成
+
+## CLI命令
+
+### 基本命令
+```bash
+# 启动交互式模式
+uv run python cli.py
+
+# 直接加载文件
+uv run python cli.py resources/SimpleDsl.yml
+
+# 验证所有资源文件
+uv run python cli.py --validate-resources
+```
+
+### 交互式命令
+```
+load <file_path>                 - 加载和验证工作流文件
+save <file_path>                 - 保存工作流到文件
+nodes                           - 列出工作流中的所有节点
+generate after <node_id> <type>  - 使用AI在指定节点后生成新节点
+help                            - 显示帮助信息
+exit                            - 退出程序
+```
+
+## 支持的节点类型
+
+支持以下节点类型：
+
+- `start` - 开始节点
+- `end` - 结束节点
+- `answer` - 回答节点
+- `llm` - LLM节点
+- `code` - 代码执行节点
+- `http-request` - HTTP请求节点
+- `tool` - 工具调用节点
+- `if-else` - 条件分支节点
+- `template-transform` - 模板转换节点
+- `variable-assigner` - 变量赋值节点
+- `knowledge-retrieval` - 知识检索节点
+- `agent` - 智能体节点
+- `iteration` - 迭代节点
+- `parameter-extractor` - 参数提取节点
+- `question-classifier` - 问题分类节点
+- `iteration-start` - 迭代开始节点
+- `loop-start` - 循环开始节点
+- `loop-end` - 循环结束节点
+- `variable-aggregator` - 变量聚合节点
+- `document-extractor` - 文档提取节点
+- `list-operator` - 列表操作节点
+- `` - 注释节点，记作空
+
+## 环境变量
+
+项目需要配置以下环境变量：
+
+```bash
+ANTHROPIC_API_KEY=your_api_key_here
+```
+
+此变量在项目根目录的 `.env` 文件中。
