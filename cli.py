@@ -1,5 +1,6 @@
 import argparse
 import cmd
+import json
 import os
 import shlex
 import sys
@@ -158,6 +159,42 @@ class CLI(cmd.Cmd):
                 print(f"  {i}. [{node.id}] {node_title} ({node_type}){conn_str}")
             else:
                 print(f"  {i}. [{node.id}] {node_title} ({node_type})")
+
+    def do_detail(self, args: str):
+        """Show detailed information for a specific node
+
+        Usage: detail --node <node_id>
+
+        Arguments:
+            --node <node_id>: ID of the node to show details for
+        """
+        parser = argparse.ArgumentParser(description="Show detailed information for a specific node", prog='detail')
+        parser.add_argument('--node', required=True, help='ID of the node to show details for')
+
+        parsed_args = self._parse_args(parser, args)
+        if not parsed_args:
+            return
+
+        if not self.ai_action:
+            print("✗ No workflow loaded")
+            return
+
+        try:
+            node = self.ai_action.dsl_file.get_node(parsed_args.node)
+            if node is None:
+                print(f"✗ Node not found: {parsed_args.node}")
+                return
+
+            print(f"\n=== Node Detail: {parsed_args.node} ===")
+            print(f"Title: {node.data.title}")
+            print(f"Type: {node.data.type}")
+            print(f"\nData (JSON):")
+            # Use model_dump to get the dictionary, then format as JSON
+            data_dict = node.data.model_dump()
+            json_str = json.dumps(data_dict, indent=2, ensure_ascii=False)
+            print(json_str)
+        except Exception as e:
+            print(f"✗ Failed to get node details: {e}")
 
     def do_generate(self, args: str):
         """Generate and add a new node using AI

@@ -96,6 +96,8 @@ load <file_path>                          - 加载和验证工作流文件
 save <file_path>                          - 保存工作流到文件
 nodes [--verbose]                         - 列出工作流中的所有节点
   --verbose, -v                           - 显示详细连接信息
+detail --node <node_id>                  - 显示指定节点的详细信息和JSON数据
+  --node <node_id>                        - 要查看详情的节点ID
 generate --after <node_id> --type <type> [--title <title>]  - 使用AI生成新节点
   --after <node_id>                       - 在指定节点后添加新节点
   --type <node_type>                      - 节点类型 (如: llm, code, http-request)
