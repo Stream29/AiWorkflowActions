@@ -199,17 +199,19 @@ class CLI(cmd.Cmd):
     def do_generate(self, args: str):
         """Generate and add a new node using AI
 
-        Usage: generate --after <node_id> --type <node_type> [--title <title>]
+        Usage: generate --after <node_id> --type <node_type> [--title <title>] [-m <message>]
 
         Arguments:
             --after <node_id>: ID of the node after which to add the new node
             --type <node_type>: Type of node to generate (e.g., llm, code, http-request)
             --title <title>: Optional custom title for the new node
+            -m, --message <message>: Custom intent/instruction for node generation
         """
         parser = argparse.ArgumentParser(description="Generate and add a new node using AI", prog='generate')
         parser.add_argument('--after', required=True, help='ID of the node after which to add the new node')
         parser.add_argument('--type', required=True, help='Type of node to generate')
         parser.add_argument('--title', help='Optional custom title for the new node')
+        parser.add_argument('-m', '--message', help='Custom intent/instruction for node generation')
 
         parsed_args = self._parse_args(parser, args)
         if not parsed_args:
@@ -221,7 +223,13 @@ class CLI(cmd.Cmd):
 
         try:
             print(f"\n🤖 Generating {parsed_args.type} node after {parsed_args.after}...")
-            node_id = self.ai_action.generate_node(parsed_args.after, NodeType(parsed_args.type))
+            if parsed_args.message:
+                print(f"   Intent: {parsed_args.message}")
+            node_id = self.ai_action.generate_node(
+                parsed_args.after,
+                NodeType(parsed_args.type),
+                user_message=parsed_args.message
+            )
             print(f"✓ Added node: {node_id}")
         except Exception as e:
             print(f"✗ Generation failed: {e}")

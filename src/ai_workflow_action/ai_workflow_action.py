@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Type, Optional
 
 from anthropic import Anthropic
 
@@ -35,14 +35,16 @@ class AiWorkflowAction:
             self,
             after_node_id: str,
             node_type: NodeType,
+            user_message: Optional[str] = None,
     ) -> str:
         """
         Generate and add a new node using AI
-        
+
         Args:
             after_node_id: Node ID after which to insert the new node
             node_type: Type of node to generate
-        
+            user_message: Optional user intent/instruction for generation
+
         Returns:
             New node ID if successful, None otherwise
         """
@@ -55,6 +57,7 @@ class AiWorkflowAction:
             node_type=node_type,
             context=context,
             node_data_model=node_data_model,
+            user_message=user_message,
         )
         return self.dsl_file.add_node_after(after_node_id, node_data)
 
@@ -63,11 +66,13 @@ class AiWorkflowAction:
             node_type: NodeType,
             context: WorkflowContext,
             node_data_model: Type[BaseNodeData],
+            user_message: Optional[str] = None,
     ) -> BaseNodeData:
         prompt = DifyWorkflowContextBuilder.build_generation_prompt(
             context=context,
             target_node_type=node_type,
             node_model_class=node_data_model,
+            user_message=user_message,
         )
 
         response = self.client.messages.create(

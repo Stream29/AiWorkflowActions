@@ -98,10 +98,11 @@ nodes [--verbose]                         - 列出工作流中的所有节点
   --verbose, -v                           - 显示详细连接信息
 detail --node <node_id>                  - 显示指定节点的详细信息和JSON数据
   --node <node_id>                        - 要查看详情的节点ID
-generate --after <node_id> --type <type> [--title <title>]  - 使用AI生成新节点
+generate --after <node_id> --type <type> [--title <title>] [-m <message>]  - 使用AI生成新节点
   --after <node_id>                       - 在指定节点后添加新节点
   --type <node_type>                      - 节点类型 (如: llm, code, http-request)
   --title <title>                         - 可选的自定义节点标题
+  -m, --message <message>                 - 自定义生成意图/指令
 validate_resources [--dir <directory>]   - 验证DSL文件
   --dir <directory>                       - 自定义验证目录
 help [command]                            - 显示帮助信息

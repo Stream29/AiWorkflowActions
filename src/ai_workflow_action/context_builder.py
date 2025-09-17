@@ -83,6 +83,7 @@ class DifyWorkflowContextBuilder:
             context: WorkflowContext,
             target_node_type: str,
             node_model_class: Optional[Type[BaseModel]] = None,
+            user_message: Optional[str] = None,
     ) -> str:
         # Extract node data with outputs for variable reference using typed models
         node_output_sequence: List[NodeOutputInfo] = []
@@ -108,7 +109,16 @@ Description: {context.description}
 {json.dumps([node.model_dump() for node in node_output_sequence], indent=2)}
 
 Note: Each node includes 'successors' and 'predecessors' arrays showing the workflow structure.
-The nodes are arranged in topological order supporting complex workflows with branches and merges.
+The nodes are arranged in topological order supporting complex workflows with branches and merges."""
+
+        # Add user message section if provided
+        if user_message:
+            prompt += f"""
+
+## User Intent
+{user_message}"""
+
+        prompt += """
 
 ## Variable Reference Syntax
 Reference outputs using: {{{{#node_id.variable#}}}}"""
@@ -125,14 +135,24 @@ Reference outputs using: {{{{#node_id.variable#}}}}"""
             prompt += f"\n\n## Schema\n{json.dumps(schema, indent=2)}"
 
         # Final instructions
+        instructions_base = [
+            f"Generate a valid 'data' field for a {target_node_type} node",
+            "Use variables from previous nodes where logical",
+            "Follow the schema requirements exactly",
+            "Create meaningful titles and descriptions",
+        ]
+
+        if user_message:
+            instructions_base.insert(1, "Incorporate the user intent specified above")
+
+        instructions_base.append("Return ONLY the JSON object, no markdown or explanation")
+
+        instructions_text = '\n'.join(f"{i}. {instruction}" for i, instruction in enumerate(instructions_base, 1))
+
         prompt += f"""
 
 ## Instructions
-1. Generate a valid 'data' field for a {target_node_type} node
-2. Use variables from previous nodes where logical
-3. Follow the schema requirements exactly
-4. Create meaningful titles and descriptions
-5. Return ONLY the JSON object, no markdown or explanation"""
+{instructions_text}"""
 
         return prompt
 
