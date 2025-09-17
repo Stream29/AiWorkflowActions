@@ -1,5 +1,8 @@
 import argparse
+import cmd
 import os
+import shlex
+import sys
 from pathlib import Path
 from typing import Optional, List
 
@@ -21,19 +24,56 @@ if env_path.exists():
     load_dotenv(env_path)
 
 
-class CLI:
+class CLI(cmd.Cmd):
     """Interactive CLI for workflow management and AI generation"""
 
+    intro = "\n=== AiWorkflowActions CLI ===\nType 'help' or '?' for commands, 'quit' to exit\n"
+
     def __init__(self):
+        super().__init__()
         # Use new layered architecture
         self.ai_action: Optional[AiWorkflowAction] = None
         self.current_file = None
+        self._update_prompt()
 
-    def cmd_load(self, file_path: str):
-        """Load a workflow file"""
+    def _update_prompt(self):
+        """Update the prompt to show current file"""
+        file_name = Path(self.current_file).name if self.current_file else 'no file'
+        self.prompt = f"[{file_name}]> "
+
+    def _parse_args(self, parser: argparse.ArgumentParser, args: str) -> Optional[argparse.Namespace]:
+        """Parse arguments using argparse and handle errors gracefully"""
+        try:
+            # Use shlex to properly split the command line
+            arg_list = shlex.split(args) if args else []
+            return parser.parse_args(arg_list)
+        except SystemExit:
+            # argparse calls sys.exit on error, catch and return None
+            return None
+        except Exception as e:
+            print(f"Error parsing arguments: {e}")
+            return None
+
+    def do_load(self, args: str):
+        """Load a workflow file
+
+        Usage: load <file_path>
+
+        Arguments:
+            file_path: Path to the workflow YAML file to load
+        """
+        parser = argparse.ArgumentParser(description="Load a workflow file", prog='load')
+        parser.add_argument('file_path', help='Path to the workflow YAML file')
+
+        parsed_args = self._parse_args(parser, args)
+        if not parsed_args:
+            return
+
+        file_path = parsed_args.file_path
         try:
             if not Path(file_path).exists():
                 print(f"✗ File not found: {file_path}")
+                return
             api_key = os.getenv("ANTHROPIC_API_KEY")
             if not api_key:
                 print("✗ ANTHROPIC_API_KEY not found in environment variables")
@@ -42,6 +82,7 @@ class CLI:
             dsl_file = DifyWorkflowDslFile(file_path)
             self.ai_action = AiWorkflowAction(api_key=api_key, dsl_file=dsl_file)
             self.current_file = file_path
+            self._update_prompt()
             info = self.ai_action.dsl_file.get_workflow_info()
             print(f"✓ Loaded and validated: {file_path}")
             print(f"  App: {info.app_name}")
@@ -56,18 +97,46 @@ class CLI:
         except Exception as e:
             print(f"✗ Failed to load: {e}")
 
-    def cmd_save(self, file_path: str):
-        """Save the workflow"""
+    def do_save(self, args: str):
+        """Save the workflow
+
+        Usage: save <file_path>
+
+        Arguments:
+            file_path: Path where to save the workflow YAML file
+        """
+        parser = argparse.ArgumentParser(description="Save the workflow", prog='save')
+        parser.add_argument('file_path', help='Path where to save the workflow YAML file')
+
+        parsed_args = self._parse_args(parser, args)
+        if not parsed_args:
+            return
+
         if not self.ai_action:
             print("✗ No workflow loaded")
+            return
+
         try:
-            self.ai_action.dsl_file.save(file_path)
-            print(f"✓ Saved: {file_path}")
+            self.ai_action.dsl_file.save(parsed_args.file_path)
+            print(f"✓ Saved: {parsed_args.file_path}")
         except Exception as e:
             print(f"✗ Failed to save: {e}")
 
-    def cmd_nodes(self):
-        """List all nodes"""
+    def do_nodes(self, args: str):
+        """List all nodes
+
+        Usage: nodes [--verbose]
+
+        Options:
+            --verbose, -v: Show detailed connection information
+        """
+        parser = argparse.ArgumentParser(description="List all nodes in the workflow", prog='nodes')
+        parser.add_argument('--verbose', '-v', action='store_true', help='Show detailed connection information')
+
+        parsed_args = self._parse_args(parser, args)
+        if not parsed_args:
+            return
+
         if not self.ai_action:
             print("✗ No workflow loaded")
             return
@@ -78,67 +147,83 @@ class CLI:
         for i, node in enumerate(nodes, 1):
             node_type = node.data.type
             node_title = self.ai_action.dsl_file.get_node(node.id).data.title
-            conn_info = []
-            for successor in node.successor_nodes:
-                conn_info.append(f"→ {successor}")
-            for predecessor in node.predecessor_nodes:
-                conn_info.append(f"← {predecessor}")
-            conn_str = f" [{', '.join(conn_info)}]" if conn_info else ""
 
-            print(f"  {i}. [{node.id}] {node_title} ({node_type}){conn_str}")
+            if parsed_args.verbose:
+                conn_info = []
+                for successor in node.successor_nodes:
+                    conn_info.append(f"→ {successor}")
+                for predecessor in node.predecessor_nodes:
+                    conn_info.append(f"← {predecessor}")
+                conn_str = f" [{', '.join(conn_info)}]" if conn_info else ""
+                print(f"  {i}. [{node.id}] {node_title} ({node_type}){conn_str}")
+            else:
+                print(f"  {i}. [{node.id}] {node_title} ({node_type})")
 
-    def cmd_generate(self, after_node_id: str, node_type: str):
-        """Generate and add a new node using AI"""
+    def do_generate(self, args: str):
+        """Generate and add a new node using AI
+
+        Usage: generate --after <node_id> --type <node_type> [--title <title>]
+
+        Arguments:
+            --after <node_id>: ID of the node after which to add the new node
+            --type <node_type>: Type of node to generate (e.g., llm, code, http-request)
+            --title <title>: Optional custom title for the new node
+        """
+        parser = argparse.ArgumentParser(description="Generate and add a new node using AI", prog='generate')
+        parser.add_argument('--after', required=True, help='ID of the node after which to add the new node')
+        parser.add_argument('--type', required=True, help='Type of node to generate')
+        parser.add_argument('--title', help='Optional custom title for the new node')
+
+        parsed_args = self._parse_args(parser, args)
+        if not parsed_args:
+            return
+
         if not self.ai_action:
             print("✗ No workflow loaded")
+            return
+
         try:
-            print(f"\n🤖 Generating {node_type} node after {after_node_id}...")
-            node_id = self.ai_action.generate_node(after_node_id, NodeType(node_type))
+            print(f"\n🤖 Generating {parsed_args.type} node after {parsed_args.after}...")
+            node_id = self.ai_action.generate_node(parsed_args.after, NodeType(parsed_args.type))
             print(f"✓ Added node: {node_id}")
         except Exception as e:
             print(f"✗ Generation failed: {e}")
 
-    def interactive_mode(self):
-        """Run interactive command loop"""
-        print("\n=== AiWorkflowActions CLI ===")
-        print("Type 'help' for commands, 'exit' to quit\n")
+    def do_quit(self, args: str):
+        """Quit the CLI"""
+        print("Goodbye!")
+        return True
 
-        while True:
-            try:
-                prompt = f"[{Path(self.current_file).name if self.current_file else 'no file'}]> "
-                command = input(prompt).strip()
-                if not command:
-                    continue
-                parts = command.split()
-                cmd = parts[0].lower()
-                if cmd in ['exit', 'quit', 'q']:
-                    print("Goodbye!")
-                    break
-                elif cmd == 'help':
-                    self.show_help()
-                elif cmd == 'load' and len(parts) > 1:
-                    self.cmd_load(parts[1])
-                elif cmd == 'save':
-                    if len(parts) > 1:
-                        self.cmd_save(parts[1])
-                    else:
-                        print("Usage: save <file_path>")
-                elif cmd == 'nodes':
-                    self.cmd_nodes()
-                elif cmd == 'generate' and len(parts) >= 4 and parts[1] == 'after':
-                    self.cmd_generate(parts[2], parts[3])
-                else:
-                    print(f"Unknown command: {command}")
-                    print("Type 'help' for available commands")
-            except KeyboardInterrupt:
-                print("\nUse 'exit' to quit")
-            except EOFError:
-                break
-            except Exception as e:
-                print(f"Error: {e}")
+    def do_exit(self, args: str):
+        """Exit the CLI (alias for quit)"""
+        return self.do_quit(args)
 
-    def cmd_validate_resources(self):
-        dsl_dir = project_root / 'resources' / 'Awesome-Dify-Workflow' / 'DSL'
+    def do_EOF(self, args: str):
+        """Handle Ctrl+D"""
+        print("\nGoodbye!")
+        return True
+
+    def emptyline(self):
+        """Don't repeat the last command on empty line"""
+        pass
+
+    def do_validate_resources(self, args: str):
+        """Validate all DSL files in resources directory
+
+        Usage: validate_resources [--dir <directory>]
+
+        Options:
+            --dir <directory>: Custom directory to validate (default: resources/Awesome-Dify-Workflow/DSL)
+        """
+        parser = argparse.ArgumentParser(description="Validate all DSL files in resources", prog='validate_resources')
+        parser.add_argument('--dir', help='Custom directory to validate',
+                          default=str(project_root / 'resources' / 'Awesome-Dify-Workflow' / 'DSL'))
+
+        parsed_args = self._parse_args(parser, args)
+        if not parsed_args:
+            return
+
+        dsl_dir = Path(parsed_args.dir)
         if not dsl_dir.exists():
             print(f"✗ DSL directory not found: {dsl_dir}")
             return
@@ -150,7 +235,7 @@ class CLI:
         failures: List[DSLValidationReport] = []
         successes = 0
         for yf in yaml_files:
-            rel = yf.relative_to(project_root)
+            rel = yf.relative_to(project_root) if yf.is_relative_to(project_root) else yf
             try:
                 with open(yf, 'r', encoding='utf-8') as f:
                     data = yaml.safe_load(f)
@@ -195,26 +280,6 @@ class CLI:
             print(f"✅ All {successes} files validated successfully with DifyWorkflowDSL.")
             return
 
-    def show_help(self):
-        """Show help message"""
-        print("""
-Commands:
-  load <file_path>         - Load and validate workflow file
-  save <file_path>         - Save workflow to file
-  nodes                    - List all nodes in workflow
-  generate after <node_id> <node_type> - Generate and add node using AI
-  help                     - Show this help
-  exit                     - Quit
-
-Examples:
-  load resources/SimpleDsl.yml
-  nodes
-  generate after start llm
-  generate after llm-1 code
-  save enhanced.yml
-""")
-
-
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(
@@ -226,12 +291,12 @@ def main():
     args = parser.parse_args()
     cli = CLI()
     if args.validate_resources:
-        cli.cmd_validate_resources()
+        cli.do_validate_resources('')
         return
     if args.file:
-        cli.cmd_load(args.file)
+        cli.do_load(f'"{args.file}"')  # Use quotes to handle paths with spaces
     # Enter interactive mode
-    cli.interactive_mode()
+    cli.cmdloop()
 
 
 if __name__ == '__main__':

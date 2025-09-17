@@ -59,8 +59,15 @@ uv add <package>
 ### 第四层：CLI
 - 用户界面层
 - 使用AiWorkflowAction提供命令行接口
+- 基于 `cmd.Cmd` + `argparse` 架构，支持复杂命令参数解析
 - 位置：`cli.py`
 - 职责：用户交互、命令解析、结果展示
+- 特性：
+  - 自动补全和历史记录
+  - 内置帮助系统
+  - 优雅的错误处理
+  - 支持复杂参数（选项、标志、位置参数等）
+  - 自动生成使用说明
 
 ### 辅助组件：DifyWorkflowContextBuilder
 - 专门的上下文构建器
@@ -83,13 +90,20 @@ uv run python cli.py --validate-resources
 ```
 
 ### 交互式命令
+
 ```
-load <file_path>                 - 加载和验证工作流文件
-save <file_path>                 - 保存工作流到文件
-nodes                           - 列出工作流中的所有节点
-generate after <node_id> <type>  - 使用AI在指定节点后生成新节点
-help                            - 显示帮助信息
-exit                            - 退出程序
+load <file_path>                          - 加载和验证工作流文件
+save <file_path>                          - 保存工作流到文件
+nodes [--verbose]                         - 列出工作流中的所有节点
+  --verbose, -v                           - 显示详细连接信息
+generate --after <node_id> --type <type> [--title <title>]  - 使用AI生成新节点
+  --after <node_id>                       - 在指定节点后添加新节点
+  --type <node_type>                      - 节点类型 (如: llm, code, http-request)
+  --title <title>                         - 可选的自定义节点标题
+validate_resources [--dir <directory>]   - 验证DSL文件
+  --dir <directory>                       - 自定义验证目录
+help [command]                            - 显示帮助信息
+quit/exit                                 - 退出程序
 ```
 
 ## 支持的节点类型
