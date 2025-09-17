@@ -1,12 +1,12 @@
-## 类型检查
+## Type Checking
 
 ```bash
 ty check --exclude resources
 ```
 
-保证每次编辑后都能通过类型检查，运行上面的命令。
+Ensure type checking passes after every edit by running the above command.
 
-## 依赖管理
+## Dependency Management
 
 ```bash
 uv run <script>
@@ -20,136 +20,136 @@ uv sync
 uv add <package>
 ```
 
-尽量使用`uv`，不要使用`pip`或者`python`。
+Use `uv` whenever possible, avoid using `pip` or `python` directly.
 
-## 类型安全
+## Type Safety
 
-使用严格的类型标记。
+Use strict type annotations.
 
-只要有可能就不要使用`Any`和`Dict`。
+Avoid using `Any` and `Dict` whenever possible.
 
-严禁在任何地方使用`has_attr`和`getattr`。
+Never use `hasattr` and `getattr` anywhere.
 
-尽可能使用pydantic model。
+Use Pydantic models whenever possible.
 
-## 参考资料
+## Reference Materials
 
-在项目的`/resources`目录下有：
+The project's `/resources` directory contains:
 
-- `SimpleDsl.yml` - 简单的DSL文件
-- `Awesome-Dify-Workflow` - 包含大量DSL文件的项目
-- `dify` - Dify官方仓库，包含了官方的解析和编辑逻辑、数据结构
+- `SimpleDsl.yml` - Simple DSL file
+- `Awesome-Dify-Workflow` - Project containing numerous DSL files
+- `dify` - Official Dify repository containing official parsing and editing logic, data structures
 
-## 架构设计
+## Architecture Design
 
-项目采用分层架构设计，从底层到顶层分为四层：
+The project uses a layered architecture design with four layers from bottom to top:
 
-### 第一层：DifyWorkflowDSL (dsl_model)
-- 最底层的数据结构层
-- 定义了Dify工作流的完整pydantic模型
-- 位置：`src/dsl_model/`
-- 职责：封装底层数据结构和验证逻辑
+### Layer 1: DifyWorkflowDSL (dsl_model)
+- Bottom-most data structure layer
+- Defines complete Pydantic models for Dify workflows
+- Location: `src/dsl_model/`
+- Responsibility: Encapsulates low-level data structures and validation logic
 
-### 第二层：DifyWorkflowDslFile
-- 工作流文件操作层
-- 封装DifyWorkflowDSL，提供基本操作（加载、保存、修改、验证）
-- 实现RAII模式进行资源管理
-- 位置：`src/ai_workflow_action/dsl_file.py`
-- 职责：文件I/O、基本工作流操作、数据验证
+### Layer 2: DifyWorkflowDslFile
+- Workflow file operations layer
+- Wraps DifyWorkflowDSL, provides basic operations (load, save, modify, validate)
+- Implements RAII pattern for resource management
+- Location: `src/ai_workflow_action/dsl_file.py`
+- Responsibility: File I/O, basic workflow operations, data validation
 
-### 第三层：AiWorkflowAction
-- AI操作层
-- 通过DifyWorkflowContextBuilder提供AI支持的工作流操作
-- 管理Anthropic API资源
-- 位置：`src/ai_workflow_action/ai_workflow_action.py`
-- 职责：AI节点生成、智能推荐、工作流分析
+### Layer 3: AiWorkflowAction
+- AI operations layer
+- Provides AI-supported workflow operations through DifyWorkflowContextBuilder
+- Manages Anthropic API resources
+- Location: `src/ai_workflow_action/ai_workflow_action.py`
+- Responsibility: AI node generation, smart recommendations, workflow analysis
 
-### 第四层：CLI
-- 用户界面层
-- 使用AiWorkflowAction提供命令行接口
-- 基于 `cmd.Cmd` + `argparse` 架构，支持复杂命令参数解析
-- 位置：`cli.py`
-- 职责：用户交互、命令解析、结果展示
-- 特性：
-  - 自动补全和历史记录
-  - 内置帮助系统
-  - 优雅的错误处理
-  - 支持复杂参数（选项、标志、位置参数等）
-  - 自动生成使用说明
+### Layer 4: CLI
+- User interface layer
+- Provides command-line interface using AiWorkflowAction
+- Based on `cmd.Cmd` + `argparse` architecture, supports complex command parameter parsing
+- Location: `cli.py`
+- Responsibility: User interaction, command parsing, result display
+- Features:
+  - Auto-completion and command history
+  - Built-in help system
+  - Elegant error handling
+  - Support for complex parameters (options, flags, positional arguments, etc.)
+  - Auto-generated usage instructions
 
-### 辅助组件：DifyWorkflowContextBuilder
-- 专门的上下文构建器
-- 为AI操作提供高质量的提示和上下文
-- 位置：`src/ai_workflow_action/context_builder.py`
-- 职责：工作流分析、上下文提取、AI提示生成
+### Supporting Component: DifyWorkflowContextBuilder
+- Specialized context builder
+- Provides high-quality prompts and context for AI operations
+- Location: `src/ai_workflow_action/context_builder.py`
+- Responsibility: Workflow analysis, context extraction, AI prompt generation
 
-## CLI命令
+## CLI Commands
 
-### 基本命令
+### Basic Commands
 ```bash
-# 启动交互式模式
+# Start interactive mode
 uv run python cli.py
 
-# 直接加载文件
+# Load file directly
 uv run python cli.py resources/SimpleDsl.yml
 
-# 验证所有资源文件
+# Validate all resource files
 uv run python cli.py --validate-resources
 ```
 
-### 交互式命令
+### Interactive Commands
 
 ```
-load <file_path>                          - 加载和验证工作流文件
-save <file_path>                          - 保存工作流到文件
-nodes [--verbose]                         - 列出工作流中的所有节点
-  --verbose, -v                           - 显示详细连接信息
-detail --node <node_id>                  - 显示指定节点的详细信息和JSON数据
-  --node <node_id>                        - 要查看详情的节点ID
-generate --after <node_id> --type <type> [--title <title>] [-m <message>]  - 使用AI生成新节点
-  --after <node_id>                       - 在指定节点后添加新节点
-  --type <node_type>                      - 节点类型 (如: llm, code, http-request)
-  --title <title>                         - 可选的自定义节点标题
-  -m, --message <message>                 - 自定义生成意图/指令
-validate_resources [--dir <directory>]   - 验证DSL文件
-  --dir <directory>                       - 自定义验证目录
-help [command]                            - 显示帮助信息
-quit/exit                                 - 退出程序
+load <file_path>                          - Load and validate workflow file
+save <file_path>                          - Save workflow to file
+nodes [--verbose]                         - List all nodes in workflow
+  --verbose, -v                           - Show detailed connection information
+detail --node <node_id>                  - Show detailed information and JSON data for specified node
+  --node <node_id>                        - Node ID to view details for
+generate --after <node_id> --type <type> [--title <title>] [-m <message>]  - Generate new node using AI
+  --after <node_id>                       - Add new node after specified node
+  --type <node_type>                      - Node type (e.g., llm, code, http-request)
+  --title <title>                         - Optional custom node title
+  -m, --message <message>                 - Custom generation intent/instruction
+validate_resources [--dir <directory>]   - Validate DSL files
+  --dir <directory>                       - Custom validation directory
+help [command]                            - Show help information
+quit/exit                                 - Exit program
 ```
 
-## 支持的节点类型
+## Supported Node Types
 
-支持以下节点类型：
+The following node types are supported:
 
-- `start` - 开始节点
-- `end` - 结束节点
-- `answer` - 回答节点
-- `llm` - LLM节点
-- `code` - 代码执行节点
-- `http-request` - HTTP请求节点
-- `tool` - 工具调用节点
-- `if-else` - 条件分支节点
-- `template-transform` - 模板转换节点
-- `variable-assigner` - 变量赋值节点
-- `knowledge-retrieval` - 知识检索节点
-- `agent` - 智能体节点
-- `iteration` - 迭代节点
-- `parameter-extractor` - 参数提取节点
-- `question-classifier` - 问题分类节点
-- `iteration-start` - 迭代开始节点
-- `loop-start` - 循环开始节点
-- `loop-end` - 循环结束节点
-- `variable-aggregator` - 变量聚合节点
-- `document-extractor` - 文档提取节点
-- `list-operator` - 列表操作节点
-- `` - 注释节点，记作空
+- `start` - Start node
+- `end` - End node
+- `answer` - Answer node
+- `llm` - LLM node
+- `code` - Code execution node
+- `http-request` - HTTP request node
+- `tool` - Tool call node
+- `if-else` - Conditional branch node
+- `template-transform` - Template transformation node
+- `variable-assigner` - Variable assignment node
+- `knowledge-retrieval` - Knowledge retrieval node
+- `agent` - Agent node
+- `iteration` - Iteration node
+- `parameter-extractor` - Parameter extraction node
+- `question-classifier` - Question classification node
+- `iteration-start` - Iteration start node
+- `loop-start` - Loop start node
+- `loop-end` - Loop end node
+- `variable-aggregator` - Variable aggregator node
+- `document-extractor` - Document extraction node
+- `list-operator` - List operator node
+- `` - Note node, marked as empty
 
-## 环境变量
+## Environment Variables
 
-项目需要配置以下环境变量：
+The project requires the following environment variables to be configured:
 
 ```bash
 ANTHROPIC_API_KEY=your_api_key_here
 ```
 
-此变量在项目根目录的 `.env` 文件中。
+This variable should be placed in the `.env` file in the project root directory.
