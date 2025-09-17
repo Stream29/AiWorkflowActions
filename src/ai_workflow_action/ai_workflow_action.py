@@ -5,7 +5,7 @@ from anthropic import Anthropic
 from dsl_model import NodeType, BaseNodeData
 from .context_builder import DifyWorkflowContextBuilder
 from .dsl_file import DifyWorkflowDslFile
-from .models import WorkflowContext
+from .models import WorkflowContext, NodeInfo
 from .node_type_util import NodeTypeUtil
 
 
@@ -48,6 +48,11 @@ class AiWorkflowAction:
         Returns:
             New node ID if successful, None otherwise
         """
+        # Resolve after_node information
+        after_node = self._get_node_info(after_node_id)
+        if not after_node:
+            raise ValueError(f"Node '{after_node_id}' not found in workflow")
+
         context = DifyWorkflowContextBuilder.build_context(
             self.dsl_file,
             target_position=after_node_id
@@ -57,20 +62,44 @@ class AiWorkflowAction:
             node_type=node_type,
             context=context,
             node_data_model=node_data_model,
+            after_node=after_node,
             user_message=user_message,
         )
         return self.dsl_file.add_node_after(after_node_id, node_data)
+
+    def _get_node_info(self, node_id: str) -> Optional[NodeInfo]:
+        """Get NodeInfo for a given node_id"""
+
+        # Get the raw node from DSL
+        raw_node = self.dsl_file.get_node(node_id)
+        if not raw_node:
+            return None
+
+        # Get node connections for predecessor/successor info
+        connections = self.dsl_file.get_node_connections(node_id)
+
+        # Build NodeInfo
+        return NodeInfo(
+            id=raw_node.id,
+            title=raw_node.data.title,
+            type=raw_node.data.type,
+            data=raw_node.data,
+            successor_nodes=connections.outgoing,
+            predecessor_nodes=connections.incoming,
+        )
 
     def _generate_node_data(
             self,
             node_type: NodeType,
             context: WorkflowContext,
             node_data_model: Type[BaseNodeData],
+            after_node: NodeInfo,
             user_message: Optional[str] = None,
     ) -> BaseNodeData:
         prompt = DifyWorkflowContextBuilder.build_generation_prompt(
             context=context,
             target_node_type=node_type,
+            after_node=after_node,
             node_model_class=node_data_model,
             user_message=user_message,
         )

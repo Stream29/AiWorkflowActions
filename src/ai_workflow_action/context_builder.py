@@ -82,6 +82,7 @@ class DifyWorkflowContextBuilder:
     def build_generation_prompt(
             context: WorkflowContext,
             target_node_type: str,
+            after_node: NodeInfo,
             node_model_class: Optional[Type[BaseModel]] = None,
             user_message: Optional[str] = None,
     ) -> str:
@@ -98,12 +99,25 @@ class DifyWorkflowContextBuilder:
             )
             node_output_sequence.append(node_output_info)
 
-        # Build prompt
+        # Build insertion position info using the provided after_node
+        insertion_info = f"""
+
+## Insertion Position
+The new {target_node_type} node will be inserted AFTER the node:
+- ID: {after_node.id}
+- Title: "{after_node.title}"
+- Type: {after_node.type}
+
+Consider this positioning when:
+1. Referencing variables from previous nodes (especially from the node you'll be inserted after)
+2. Designing the node's logic to fit seamlessly into the workflow flow
+3. Ensuring the new node appropriately processes data from the preceding node"""
+
         prompt = f"""Generate configuration for a {target_node_type} node in a Dify workflow.
 
 ## Workflow Context
 App: {context.app_name}
-Description: {context.description}
+Description: {context.description}{insertion_info}
 
 ## Workflow Nodes (Topologically Sorted)
 {json.dumps([node.model_dump() for node in node_output_sequence], indent=2)}
