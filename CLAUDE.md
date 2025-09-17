@@ -32,6 +32,14 @@ uv add <package>
 
 尽可能使用pydantic model。
 
+## 参考资料
+
+在项目的`/resources`目录下有：
+
+- `SimpleDsl.yml` - 简单的DSL文件
+- `Awesome-Dify-Workflow` - 包含大量DSL文件的项目
+- `dify` - Dify官方仓库，包含了官方的解析和编辑逻辑、数据结构
+
 ## 架构设计
 
 项目采用分层架构设计，从底层到顶层分为四层：
