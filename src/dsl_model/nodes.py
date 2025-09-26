@@ -160,6 +160,7 @@ class TemplateTransformNodeData(BaseNodeData):
     """Template transform node - text template processing"""
     type: Literal[NodeType.TEMPLATE_TRANSFORM] = Field(default=NodeType.TEMPLATE_TRANSFORM)
     template: str = Field(min_length=1, description="Jinja2 template")
+    variables: Sequence[VariableSelector]
 
 
 
