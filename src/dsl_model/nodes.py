@@ -8,6 +8,7 @@ from .core import (
     ContextConfig,
     LLMNodeChatModelMessage,
     LLMNodeCompletionModelPromptTemplate,
+    MemoryConfig,
     ModelConfig,
     PromptConfig,
     PromptMessage,
@@ -40,12 +41,27 @@ class LLMNodeData(BaseNodeData):
     model: ModelConfig
     prompt_template: Union[Sequence[LLMNodeChatModelMessage], LLMNodeCompletionModelPromptTemplate]
     prompt_config: PromptConfig = Field(default_factory=PromptConfig)
-    memory: Optional[Dict[str, Any]] = None
+    memory: Optional[MemoryConfig] = None
     context: ContextConfig
     vision: VisionConfig = Field(default_factory=VisionConfig)
     structured_output: Optional[Dict[str, Any]] = None
     structured_output_switch_on: bool = Field(default=False, alias="structured_output_enabled")
-    reasoning_format: Literal["separated", "tagged"] = Field(default="tagged")
+    reasoning_format: Literal["separated", "tagged"] = Field(
+        default="tagged",
+        description=(
+            "Strategy for handling model reasoning output. "
+            "separated: Return clean text (without <think> tags) + reasoning_content field. "
+            "tagged: Return original text (with <think> tags) + reasoning_content field."
+        )
+    )
+
+    @field_validator('prompt_config', mode='before')
+    @classmethod
+    def convert_none_prompt_config(cls, v):
+        """Convert None to empty PromptConfig"""
+        if v is None:
+            return PromptConfig()
+        return v
 
     @property
     def structured_output_enabled(self) -> bool:
@@ -235,14 +251,74 @@ class IterationNodeData(BaseNodeData):
 
 
 class ParameterExtractorNodeData(BaseNodeData):
-    """Parameter extractor node"""
+    """Parameter extractor node - extracts structured parameters from input"""
     type: Literal[NodeType.PARAMETER_EXTRACTOR] = Field(default=NodeType.PARAMETER_EXTRACTOR)
-    query: Union[str, List[str]] = Field(description="Query string or list of query strings")
-    parameters: List[Dict[str, Any]]
-    model: Optional[ModelConfig] = None
+
+    class ParameterConfig(BaseModel):
+        """Parameter configuration for extraction"""
+        name: str = Field(min_length=1)
+        type: SegmentType  # Uses SegmentType enum for parameter types
+        options: Optional[List[str]] = None
+        description: str = ""
+        required: bool = False
+
+        @field_validator('name', mode='before')
+        @classmethod
+        def validate_name(cls, v) -> str:
+            if not v:
+                raise ValueError("Parameter name is required")
+            if v in {"__reason", "__is_success"}:
+                raise ValueError("Invalid parameter name, __reason and __is_success are reserved")
+            return str(v)
+
+        @field_validator('type', mode='before')
+        @classmethod
+        def validate_type(cls, v):
+            """Validate and convert type, handling legacy 'bool' and 'select' types"""
+            if isinstance(v, str):
+                # Handle legacy type names
+                if v == "bool":
+                    return SegmentType.BOOLEAN
+                elif v == "select":
+                    return SegmentType.STRING
+                # Try to convert string to SegmentType
+                try:
+                    return SegmentType(v)
+                except ValueError:
+                    pass
+            elif isinstance(v, SegmentType):
+                return v
+
+            # Validate against allowed types
+            allowed = {
+                SegmentType.STRING, SegmentType.NUMBER, SegmentType.BOOLEAN,
+                SegmentType.ARRAY_STRING, SegmentType.ARRAY_NUMBER,
+                SegmentType.ARRAY_OBJECT, SegmentType.ARRAY_BOOLEAN
+            }
+            if v not in allowed:
+                raise ValueError(f"Type {v} is not allowed for Parameter Extractor node")
+            return v
+
+    model: ModelConfig
+    query: List[str]  # Always a list of strings for query
+    parameters: List[ParameterConfig]
     instruction: Optional[str] = None
-    reasoning_mode: Literal["function_call", "prompt"] = "function_call"
-    vision: Optional[VisionConfig] = None
+    memory: Optional[MemoryConfig] = None
+    reasoning_mode: Literal["function_call", "prompt"] = Field(default="function_call")
+    vision: VisionConfig = Field(default_factory=VisionConfig)
+
+    @field_validator('reasoning_mode', mode='before')
+    @classmethod
+    def set_reasoning_mode(cls, v) -> str:
+        return v or "function_call"
+
+    @field_validator('query', mode='before')
+    @classmethod
+    def ensure_query_list(cls, v):
+        """Ensure query is always a list"""
+        if isinstance(v, str):
+            return [v]
+        return v
 
 
 class QuestionClassifierNodeData(BaseNodeData):

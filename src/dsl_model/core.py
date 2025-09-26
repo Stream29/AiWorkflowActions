@@ -119,6 +119,24 @@ class RetryConfig(BaseModel):
         return self.retry_interval / 1000
 
 
+class MemoryConfig(BaseModel):
+    """Memory configuration for parameter extraction and LLM nodes"""
+
+    class RolePrefix(BaseModel):
+        """Role prefix for memory"""
+        user: str = ""
+        assistant: str = ""
+
+    class WindowConfig(BaseModel):
+        """Window configuration for memory"""
+        enabled: bool = False
+        size: Optional[int] = None
+
+    role_prefix: Optional[RolePrefix] = None
+    window: WindowConfig = Field(default_factory=WindowConfig)
+    query_prompt_template: Optional[str] = None
+
+
 class BaseNodeData(BaseModel, ABC):
     """Abstract base class for all node data types"""
 
