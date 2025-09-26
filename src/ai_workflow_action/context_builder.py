@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from .dsl_file import DifyWorkflowDslFile
 from .models import WorkflowContext, NodeInfo, TopologyNodeData, NodeOutputInfo
+from .node_prompts import get_node_type_prompt_by_string
 
 
 class DifyWorkflowContextBuilder:
@@ -113,11 +114,17 @@ Consider this positioning when:
 2. Designing the node's logic to fit seamlessly into the workflow flow
 3. Ensuring the new node appropriately processes data from the preceding node"""
 
+        # Get node type specific prompt
+        node_type_prompt = get_node_type_prompt_by_string(target_node_type)
+
         prompt = f"""Generate configuration for a {target_node_type} node in a Dify workflow.
 
 ## Workflow Context
 App: {context.app_name}
 Description: {context.description}{insertion_info}
+
+## Node Type Guidance
+{node_type_prompt if node_type_prompt else f"Creating a {target_node_type} node."}
 
 ## Workflow Nodes (Topologically Sorted)
 {json.dumps([node.model_dump() for node in node_output_sequence], indent=2)}
