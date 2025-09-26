@@ -136,24 +136,55 @@ class IfElseNodeData(BaseNodeData):
     """If-else node - conditional branching"""
     type: Literal[NodeType.IF_ELSE] = Field(default=NodeType.IF_ELSE)
 
+    class SubCondition(BaseModel):
+        """Sub-condition for complex conditions"""
+        key: str
+        comparison_operator: Literal[
+            # for string or array
+            "contains", "not contains", "start with", "end with",
+            "is", "is not", "empty", "not empty", "in", "not in", "all of",
+            # for number
+            "=", "≠", ">", "<", "≥", "≤", "null", "not null",
+            # for file
+            "exists", "not exists"
+        ]
+        value: Optional[Union[str, List[str]]] = None
+
+    class SubVariableCondition(BaseModel):
+        """Sub-variable condition for complex conditions"""
+        logical_operator: Literal["and", "or"]
+        conditions: List["IfElseNodeData.SubCondition"] = Field(default_factory=list)
+
     class Condition(BaseModel):
         """Single condition"""
+        id: Optional[str] = Field(default=None, description="Condition ID")
         variable_selector: List[str]
         comparison_operator: Literal[
-            "=", "≠", ">", "<", "≥", "≤", 
-            "contains", "not contains", "start with", "end with", "starts with", "ends with",
+            # for string or array
+            "contains", "not contains", "start with", "end with",
             "is", "is not", "empty", "not empty", "in", "not in", "all of",
-            "null", "not null", "exists", "not exists"
+            # for number
+            "=", "≠", ">", "<", "≥", "≤", "null", "not null",
+            # for file
+            "exists", "not exists"
         ]
-        value: str
+        value: Optional[Union[str, List[str], bool]] = None
+        varType: Optional[str] = Field(default=None, description="Variable type (e.g., 'string')")
+        sub_variable_condition: Optional["IfElseNodeData.SubVariableCondition"] = None
 
     class Case(BaseModel):
         """Condition case"""
         case_id: str = Field(min_length=1)
+        id: Optional[str] = Field(default=None, description="Case ID (often same as case_id)")
         conditions: List["IfElseNodeData.Condition"]
-        logical_operator: Literal["and", "or"]
+        logical_operator: Literal["and", "or"] = Field(default="and")
 
-    cases: List[Case]
+    # Deprecated top-level fields for backward compatibility
+    logical_operator: Optional[Literal["and", "or"]] = Field(default="and", deprecated=True)
+    conditions: Optional[List[Condition]] = Field(default=None, deprecated=True)
+
+    # Main cases field
+    cases: Optional[List[Case]] = None
 
 
 class TemplateTransformNodeData(BaseNodeData):
