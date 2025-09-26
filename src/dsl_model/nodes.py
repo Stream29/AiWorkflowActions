@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Literal, Optional, Sequence, Union, Annotated
+from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
@@ -212,12 +213,37 @@ class TemplateTransformNodeData(BaseNodeData):
 
 
 class VariableAssignerNodeData(BaseNodeData):
-    """Variable assigner node"""
-    type: Literal[NodeType.VARIABLE_ASSIGNER, NodeType.LEGACY_VARIABLE_AGGREGATOR] = Field(default=NodeType.VARIABLE_ASSIGNER)
-    assigned_variable_selector: Optional[List[str]] = None
-    input_variable_selector: Optional[List[str]] = None
-    write_mode: Literal["over-write", "append", "clear"] = "over-write"
+    """Variable assigner node - v2 implementation"""
 
+    class InputType(StrEnum):
+        """Input type for variable operations"""
+        VARIABLE = "variable"
+        CONSTANT = "constant"
+
+    class Operation(StrEnum):
+        """Operations for variable assignment"""
+        OVER_WRITE = "over-write"
+        CLEAR = "clear"
+        APPEND = "append"
+        EXTEND = "extend"
+        SET = "set"
+        ADD = "+="
+        SUBTRACT = "-="
+        MULTIPLY = "*="
+        DIVIDE = "/="
+        REMOVE_FIRST = "remove-first"
+        REMOVE_LAST = "remove-last"
+
+    class VariableOperationItem(BaseModel):
+        """Operation item for variable assignment"""
+        variable_selector: List[str]
+        input_type: 'VariableAssignerNodeData.InputType'
+        operation: 'VariableAssignerNodeData.Operation'
+        value: Any = None
+
+    type: Literal[NodeType.VARIABLE_ASSIGNER] = Field(default=NodeType.VARIABLE_ASSIGNER)
+    version: str = "2"
+    items: List[VariableOperationItem] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="allow")
 
@@ -347,11 +373,25 @@ class LoopEndNodeData(BaseNodeData):
 
 
 class VariableAggregatorNodeData(BaseNodeData):
-    """Variable aggregator node - aggregate values across iterations or lists"""
-    type: Literal[NodeType.VARIABLE_AGGREGATOR] = Field(default=NodeType.VARIABLE_AGGREGATOR)
-    # Keep permissive; different DSLs use various shapes
-    aggregator: Optional[str] = None
-    source_selector: Optional[List[str]] = None
+    """Variable aggregator node - aggregate/select variables for output"""
+
+    class AdvancedSettings(BaseModel):
+        """Advanced settings for grouped output"""
+
+        class Group(BaseModel):
+            """Group configuration"""
+            output_type: SegmentType
+            variables: List[List[str]]
+            group_name: str
+
+        group_enabled: bool
+        groups: List[Group]
+
+    type: Literal[NodeType.VARIABLE_AGGREGATOR, NodeType.LEGACY_VARIABLE_AGGREGATOR] = Field(default=NodeType.VARIABLE_AGGREGATOR)
+    output_type: str = ""  # Output type for the aggregated variable
+    variables: List[List[str]] = Field(default_factory=list)  # List of variable selectors to aggregate
+    advanced_settings: Optional[AdvancedSettings] = None
+
     model_config = ConfigDict(extra="allow")
 
 
