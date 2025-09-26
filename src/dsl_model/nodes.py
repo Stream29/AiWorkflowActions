@@ -64,11 +64,6 @@ class LLMNodeData(BaseNodeData):
             return PromptConfig()
         return v
 
-    @property
-    def structured_output_enabled(self) -> bool:
-        """Backward compatibility property"""
-        return self.structured_output_switch_on and self.structured_output is not None
-
 
 class CodeNodeData(BaseNodeData):
     """Code node - execute Python/JavaScript code"""
