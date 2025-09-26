@@ -45,7 +45,7 @@ class LLMNodeData(BaseNodeData):
     context: ContextConfig
     vision: VisionConfig = Field(default_factory=VisionConfig)
     structured_output: Optional[Dict[str, Any]] = None
-    structured_output_switch_on: bool = Field(default=False, alias="structured_output_enabled")
+    structured_output_enabled: bool = Field(default=False, alias="structured_output_switch_on")
     reasoning_format: Literal["separated", "tagged"] = Field(
         default="tagged",
         description=(
