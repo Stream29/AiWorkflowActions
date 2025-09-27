@@ -243,14 +243,95 @@ class VariableAssignerNodeData(BaseNodeData):
     model_config = ConfigDict(extra="allow")
 
 
+class RerankingModelConfig(BaseModel):
+    """Reranking Model Config."""
+    provider: str
+    model: str
+
+
+class VectorSetting(BaseModel):
+    """Vector Setting."""
+    vector_weight: float
+    embedding_provider_name: str
+    embedding_model_name: str
+
+
+class KeywordSetting(BaseModel):
+    """Keyword Setting."""
+    keyword_weight: float
+
+
+class WeightedScoreConfig(BaseModel):
+    """Weighted score Config."""
+    vector_setting: VectorSetting
+    keyword_setting: KeywordSetting
+
+
+class MultipleRetrievalConfig(BaseModel):
+    """Multiple Retrieval Config."""
+    top_k: int
+    score_threshold: Optional[float] = None
+    reranking_mode: str = "reranking_model"
+    reranking_enable: bool = True
+    reranking_model: Optional[RerankingModelConfig] = None
+    weights: Optional[WeightedScoreConfig] = None
+
+
+class SingleRetrievalConfig(BaseModel):
+    """Single Retrieval Config."""
+    model: ModelConfig
+
+
+SupportedComparisonOperator = Literal[
+    # for string or array
+    "contains",
+    "not contains",
+    "start with",
+    "end with",
+    "is",
+    "is not",
+    "empty",
+    "not empty",
+    "in",
+    "not in",
+    # for number
+    "=",
+    "≠",
+    ">",
+    "<",
+    "≥",
+    "≤",
+    # for time
+    "before",
+    "after",
+]
+
+
+class Condition(BaseModel):
+    """Condition detail"""
+    name: str
+    comparison_operator: SupportedComparisonOperator
+    value: Optional[Union[str, Sequence[str], int, float]] = None
+
+
+class MetadataFilteringCondition(BaseModel):
+    """Metadata Filtering Condition."""
+    logical_operator: Optional[Literal["and", "or"]] = "and"
+    conditions: Optional[List[Condition]] = Field(default=None, deprecated=True)
+
+
 class KnowledgeRetrievalNodeData(BaseNodeData):
-    """Knowledge retrieval node"""
+    """Knowledge retrieval Node Data."""
     type: Literal[NodeType.KNOWLEDGE_RETRIEVAL] = Field(default=NodeType.KNOWLEDGE_RETRIEVAL)
-    dataset_ids: List[str]
     query_variable_selector: List[str]
-    retrieval_mode: Literal["single", "multiple"] = "single"
-    top_k: int = Field(default=3, ge=1, le=20)
-    score_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    dataset_ids: List[str]
+    retrieval_mode: Literal["single", "multiple"]
+    multiple_retrieval_config: Optional[MultipleRetrievalConfig] = None
+    single_retrieval_config: Optional[SingleRetrievalConfig] = None
+    metadata_filtering_mode: Optional[Literal["disabled", "automatic", "manual"]] = "disabled"
+    metadata_model_config: Optional[ModelConfig] = None
+    metadata_filtering_conditions: Optional[MetadataFilteringCondition] = None
+    vision: VisionConfig = Field(default_factory=VisionConfig)
 
 
 class AgentNodeData(BaseNodeData):
