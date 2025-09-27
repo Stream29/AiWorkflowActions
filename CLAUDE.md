@@ -111,6 +111,10 @@ generate --after <node_id> --type <type> [--title <title>] [-m <message>]  - Gen
   --type <node_type>                      - Node type (e.g., llm, code, http-request)
   --title <title>                         - Optional custom node title
   -m, --message <message>                 - Custom generation intent/instruction
+remove --single <node_id>                - Remove a single node and all edges connected to it
+  --single <node_id>                     - ID of the single node to remove
+remove --after <node_id>                 - Remove all nodes after the specified node
+  --after <node_id>                      - ID of the node whose successors to remove
 validate_resources [--dir <directory>]   - Validate DSL files
   --dir <directory>                       - Custom validation directory
 help [command]                            - Show help information

@@ -1,6 +1,6 @@
 import random
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 import yaml
 
@@ -120,6 +120,126 @@ class DifyWorkflowDslFile:
             new_type=new_node_data.type
         )
         return node_id
+
+    def remove_node(self, node_id: str) -> None:
+        """
+        Remove a single node and all edges connected to it
+
+        Args:
+            node_id: ID of the node to remove
+
+        Raises:
+            ValueError: If node with given ID is not found
+        """
+        node = self.get_node(node_id)
+        if not node:
+            raise ValueError(f"Node '{node_id}' not found")
+
+        # Remove the node
+        self.dsl.workflow.graph.nodes = [
+            n for n in self.dsl.workflow.graph.nodes if n.id != node_id
+        ]
+
+        # Remove all edges connected to this node
+        self.dsl.workflow.graph.edges = [
+            e for e in self.dsl.workflow.graph.edges
+            if e.source != node_id and e.target != node_id
+        ]
+
+    def remove_nodes_after(self, node_id: str) -> List[str]:
+        """
+        Remove all nodes that come after the specified node
+        Handles iteration/loop nodes specially
+
+        Args:
+            node_id: ID of the node whose successors to remove
+
+        Returns:
+            List of removed node IDs
+        """
+        node = self.get_node(node_id)
+        if not node:
+            return []
+
+        # Find all nodes to remove using BFS
+        nodes_to_remove: Set[str] = set()
+        queue: List[str] = []
+
+        # Get direct successors
+        connections = self.get_node_connections(node_id)
+        queue.extend(connections.outgoing)
+
+        # Special handling for iteration/loop nodes
+        if node.data.type in ['iteration', 'iteration-start', 'loop-start']:
+            # If the node is an iteration/loop node, we need to find its end node
+            # and remove everything after the end node as well
+            nodes_to_remove.update(self._get_iteration_or_loop_contents(node_id))
+            # Also add nodes after the iteration/loop end
+            for n_id in list(nodes_to_remove):
+                conn = self.get_node_connections(n_id)
+                queue.extend(conn.outgoing)
+
+        # BFS to find all downstream nodes
+        while queue:
+            current = queue.pop(0)
+            if current not in nodes_to_remove:
+                nodes_to_remove.add(current)
+                connections = self.get_node_connections(current)
+                queue.extend(connections.outgoing)
+
+                # If we encounter another iteration/loop node, include its contents
+                current_node = self.get_node(current)
+                if current_node and current_node.data.type in ['iteration', 'iteration-start', 'loop-start']:
+                    nodes_to_remove.update(self._get_iteration_or_loop_contents(current))
+
+        # Remove all identified nodes and their edges
+        removed_nodes: List[str] = []
+        for node_to_remove in nodes_to_remove:
+            try:
+                self.remove_node(node_to_remove)
+                removed_nodes.append(node_to_remove)
+            except ValueError:
+                # Node may have already been removed as part of iteration/loop cleanup
+                pass
+
+        return removed_nodes
+
+    def _get_iteration_or_loop_contents(self, start_node_id: str) -> Set[str]:
+        """
+        Get all nodes within an iteration or loop block
+
+        Args:
+            start_node_id: ID of the iteration/loop start node
+
+        Returns:
+            Set of node IDs within the iteration/loop
+        """
+        start_node = self.get_node(start_node_id)
+        if not start_node:
+            return set()
+
+        # For iteration/loop nodes, we need to find all nodes marked as being inside
+        nodes_in_block: Set[str] = set()
+
+        # Check edges for isInIteration or isInLoop flags
+        for edge in self.dsl.workflow.graph.edges:
+            if edge.data.isInIteration or edge.data.isInLoop:
+                # Add both source and target if they're part of this iteration/loop
+                # This is a simplified approach - in reality, we'd need to trace
+                # the specific iteration/loop block
+                nodes_in_block.add(edge.source)
+                nodes_in_block.add(edge.target)
+
+        # Alternative approach: find nodes between start and end nodes
+        if start_node.data.type in ['loop-start']:
+            # Find corresponding loop-end node
+            for node in self.dsl.workflow.graph.nodes:
+                if node.data.type == 'loop-end':
+                    # Assume nodes are paired (simplified - real implementation would track pairing)
+                    nodes_in_block.add(node.id)
+                    break
+
+        return nodes_in_block
 
     # === Private Helper Methods ===
 

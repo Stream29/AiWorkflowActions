@@ -234,6 +234,77 @@ class CLI(cmd.Cmd):
         except Exception as e:
             print(f"✗ Generation failed: {e}")
 
+    def do_remove(self, args: str):
+        """Remove nodes from the workflow
+
+        Usage: remove --single <node_id>
+               remove --after <node_id>
+
+        Arguments:
+            --single <node_id>: Remove a single node and all edges connected to it
+            --after <node_id>: Remove all nodes after the specified node (not including the node itself)
+                              If the node is in a loop, all subsequent nodes in the loop are also removed
+        """
+        parser = argparse.ArgumentParser(description="Remove nodes from the workflow", prog='remove')
+        group = parser.add_mutually_exclusive_group(required=True)
+        group.add_argument('--single', help='ID of the single node to remove')
+        group.add_argument('--after', help='ID of the node whose successors to remove')
+
+        parsed_args = self._parse_args(parser, args)
+        if not parsed_args:
+            return
+
+        if not self.ai_action:
+            print("✗ No workflow loaded")
+            return
+
+        try:
+            if parsed_args.single:
+                # Remove single node
+                node_id = parsed_args.single
+                node = self.ai_action.dsl_file.get_node(node_id)
+                if not node:
+                    print(f"✗ Node not found: {node_id}")
+                    return
+
+                # Get node info before removal
+                node_title = node.data.title
+                node_type = node.data.type
+
+                # Remove the node
+                try:
+                    self.ai_action.dsl_file.remove_node(node_id)
+                    print(f"✓ Removed node: [{node_id}] {node_title} ({node_type})")
+                except ValueError as e:
+                    print(f"✗ Failed to remove node: {e}")
+
+            elif parsed_args.after:
+                # Remove all nodes after the specified node
+                node_id = parsed_args.after
+                node = self.ai_action.dsl_file.get_node(node_id)
+                if not node:
+                    print(f"✗ Node not found: {node_id}")
+                    return
+
+                # Get info about nodes to be removed
+                connections = self.ai_action.dsl_file.get_node_connections(node_id)
+                if not connections.outgoing:
+                    print(f"ℹ Node [{node_id}] has no successor nodes")
+                    return
+
+                # Remove nodes
+                removed_ids = self.ai_action.dsl_file.remove_nodes_after(node_id)
+
+                if removed_ids:
+                    print(f"✓ Removed {len(removed_ids)} node(s) after [{node_id}]:")
+                    for removed_id in removed_ids:
+                        print(f"  - {removed_id}")
+                else:
+                    print(f"ℹ No nodes were removed")
+
+        except Exception as e:
+            print(f"✗ Remove operation failed: {e}")
+
     def do_quit(self, args: str):
         """Quit the CLI"""
         print("Goodbye!")
