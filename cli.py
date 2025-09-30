@@ -239,16 +239,20 @@ class CLI(cmd.Cmd):
 
         Usage: remove --single <node_id>
                remove --after <node_id>
+               remove --from <node_id>
 
         Arguments:
             --single <node_id>: Remove a single node and all edges connected to it
             --after <node_id>: Remove all nodes after the specified node (not including the node itself)
                               If the node is in a loop, all subsequent nodes in the loop are also removed
+            --from <node_id>: Remove the specified node and all nodes after it
+                             Protected nodes (iteration-start, loop-start) cannot be removed with this option
         """
         parser = argparse.ArgumentParser(description="Remove nodes from the workflow", prog='remove')
         group = parser.add_mutually_exclusive_group(required=True)
         group.add_argument('--single', help='ID of the single node to remove')
         group.add_argument('--after', help='ID of the node whose successors to remove')
+        group.add_argument('--from', dest='from_node', help='ID of the node to remove (along with all successors)')
 
         parsed_args = self._parse_args(parser, args)
         if not parsed_args:
@@ -301,6 +305,27 @@ class CLI(cmd.Cmd):
                         print(f"  - {removed_id}")
                 else:
                     print(f"ℹ No nodes were removed")
+
+            elif parsed_args.from_node:
+                # Remove the node and all nodes after it
+                node_id = parsed_args.from_node
+                node = self.ai_action.dsl_file.get_node(node_id)
+                if not node:
+                    print(f"✗ Node not found: {node_id}")
+                    return
+
+                # Get node info before removal
+                node_title = node.data.title
+                node_type = node.data.type
+
+                # Remove the node and its successors
+                try:
+                    removed_ids = self.ai_action.dsl_file.remove_node_and_after(node_id)
+                    print(f"✓ Removed node [{node_id}] {node_title} ({node_type}) and {len(removed_ids) - 1} successor(s):")
+                    for removed_id in removed_ids:
+                        print(f"  - {removed_id}")
+                except ValueError as e:
+                    print(f"✗ Failed to remove node: {e}")
 
         except Exception as e:
             print(f"✗ Remove operation failed: {e}")
