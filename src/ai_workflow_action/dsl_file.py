@@ -204,6 +204,43 @@ class DifyWorkflowDslFile:
 
         return removed_nodes
 
+    def remove_node_and_after(self, node_id: str) -> List[str]:
+        """
+        Remove a node and all nodes that come after it
+        Refuses to remove special nodes like iteration-start, loop-start to maintain workflow integrity
+
+        Args:
+            node_id: ID of the node to remove (along with its successors)
+
+        Returns:
+            List of removed node IDs
+
+        Raises:
+            ValueError: If node is a special type that cannot be removed
+        """
+        node = self.get_node(node_id)
+        if not node:
+            raise ValueError(f"Node '{node_id}' not found")
+
+        # Check if the node is a protected type
+        protected_types = ['iteration-start', 'loop-start']
+        if node.data.type in protected_types:
+            raise ValueError(
+                f"Cannot remove node of type '{node.data.type}'. "
+                f"This is a special node that maintains workflow structure. "
+                f"Consider using 'remove --after' to remove only successor nodes, "
+                f"or remove the parent iteration/loop container instead."
+            )
+
+        # First remove all successor nodes
+        removed_nodes = self.remove_nodes_after(node_id)
+
+        # Then remove the node itself
+        self.remove_node(node_id)
+        removed_nodes.insert(0, node_id)
+
+        return removed_nodes
+
     def _get_iteration_or_loop_contents(self, start_node_id: str) -> Set[str]:
         """
         Get all nodes within an iteration or loop block
