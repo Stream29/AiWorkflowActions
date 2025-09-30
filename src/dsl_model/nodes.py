@@ -138,6 +138,7 @@ class ToolNodeData(BaseNodeData):
     # Removed type field to match dify/api
     provider_id: str = Field(min_length=1)
     provider_name: str = Field(min_length=1)
+    provider_type: Optional[str] = Field(default=None)
     tool_name: str = Field(min_length=1)
     tool_label: str = Field(default="")
     tool_parameters: Dict[str, Any] = Field(default_factory=dict)
