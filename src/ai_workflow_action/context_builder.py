@@ -141,8 +141,44 @@ The nodes are arranged in topological order supporting complex workflows with br
 
         prompt += """
 
-## Variable Reference Syntax
-Reference outputs using: {{{{#node_id.variable#}}}}"""
+## Node Output Variables Reference
+
+### Variable Reference Syntax
+Use `{{{{#node_id.variable_name#}}}}` to reference node outputs.
+
+### Common Output Variables by Node Type
+
+**start**: `<user_input_key>`, `sys.<system_var>` (e.g., sys.query, sys.files)
+**end**: `<variable_name>` (dynamic, based on configuration)
+**answer**: `answer` (str), `files` (array)
+**llm**: `text` (str), `reasoning_content` (str), `usage` (dict), `finish_reason` (str|null), `structured_output` (optional), `files` (optional)
+**code**: `<custom>` (types: string, number, boolean, object, array[string/number/object/boolean])
+**tool**: `text` (str), `files` (array), `json` (list[dict]), `<tool_variables>` (optional)
+**http-request**: `status_code` (int), `body` (str), `headers` (dict), `files` (array)
+**knowledge-retrieval**: `result` (array[object]) with fields: content, title, metadata.score, metadata.dataset_name
+**if-else**: `result` (bool), `selected_case_id` (str)
+**question-classifier**: `class_name` (str), `class_id` (str), `usage` (dict)
+**template-transform**: `output` (str)
+**parameter-extractor**: `__is_success` (int), `__reason` (str), `__usage` (dict), `<param_name>` (dynamic)
+**iteration**: `output` (array, auto-flattens when all outputs are lists)
+**list-operator**: `result` (array), `first_record` (dynamic|null), `last_record` (dynamic|null)
+**variable-aggregator**: `output` (any) or `<group_name>.output` (grouped mode)
+**variable-assigner**: No output variables (modifies existing variables in-place)
+**agent**: `text` (str), `usage` (dict), `files` (array), `json` (list[dict]), `<tool_variables>` (optional)
+**document-extractor**: `text` (str or array[str])
+
+### Array/Object Access Examples
+- `{{{{#node.result[0]#}}}}` - First array element
+- `{{{{#node.result[0].content#}}}}` - Nested field in array element
+- `{{{{#node.headers.Content-Type#}}}}` - Dictionary key access
+
+### Important Notes
+1. Failed nodes do NOT write outputs to VariablePool
+2. Variable Assigner modifies existing variables, produces no new outputs
+3. Iteration node auto-flattens output when all items are lists
+4. Tool/Agent json defaults to [{"data": []}] when empty
+
+### Available Variables from Previous Nodes"""
 
         # Add available variables
         for node in node_output_sequence:
@@ -158,7 +194,9 @@ Reference outputs using: {{{{#node_id.variable#}}}}"""
         # Final instructions
         instructions_base = [
             f"Generate a valid 'data' field for a {target_node_type} node",
-            "Use variables from previous nodes where logical",
+            "Reference variables from previous nodes using correct syntax: {{#node_id.variable#}}",
+            "Verify referenced variables exist based on node type (see Output Variables Reference)",
+            "Prefer using variables from the immediately preceding node when logical",
             "Follow the schema requirements exactly",
             "Create meaningful titles and descriptions",
         ]
