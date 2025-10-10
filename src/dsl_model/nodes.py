@@ -351,6 +351,8 @@ class IterationNodeData(BaseNodeData):
     iterator_selector: List[str]
     output_selector: List[str]
     output_type: SegmentType = SegmentType.ARRAY_OBJECT
+    startNodeType: NodeType
+    start_node_id: str
 
 
 class ParameterExtractorNodeData(BaseNodeData):

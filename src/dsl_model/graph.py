@@ -38,6 +38,9 @@ class Node(BaseModel):
     selected: bool = Field(default=False)
     sourcePosition: Literal["left", "right", "top", "bottom"] = Field(default="right")
     targetPosition: Literal["left", "right", "top", "bottom"] = Field(default="left")
+    extent: Optional[str] = Field(default=None)
+    parentId: Optional[str] = Field(default=None)
+    zIndex: Optional[int] = Field(default=None)
     type: str = Field(default="custom")
 
 
