@@ -148,12 +148,104 @@ The following node types are supported:
 - `list-operator` - List operator node
 - `` - Note node, marked as empty
 
-## Environment Variables
+## Configuration
 
-The project requires the following environment variables to be configured:
+The project uses a centralized configuration system via `config.yml`.
 
-```bash
-ANTHROPIC_API_KEY=your_api_key_here
+### Main Configuration File
+
+**File**: `config.yml` + `local.config.yml`(for api key and config local overwrite)
+
+```yaml
+# Global API Configuration
+api:
+  anthropic_api_key: ${ANTHROPIC_API_KEY}  # This should be overwritten in `local.config.yml`
+
+# Global Model Configuration
+models:
+  node_generation: claude-sonnet-4-5-20250929
+  user_intent_inference: claude-sonnet-4-5-20250929
+  judge: claude-sonnet-4-5-20250929
+
+# Evaluation System Configuration
+evaluation:
+  dataset:
+    source_dsl_dir: resources/Awesome-Dify-Workflow/DSL
+    total_samples: 90
+    max_samples_per_file: 5
+    excluded_node_types:
+      - start
+      - end
+      - iteration-start
+      - loop-start
+      - loop-end
+      - ""
+
+  user_message_inference:
+    prompt_template: src/evaluation/prompts/user_message_inference.txt
+    temperature: 0.0
+    max_tokens: 200
+
+  judge:
+    prompt_template: src/evaluation/prompts/llm_judge_eval.txt
+    temperature: 0.0
+    max_tokens: 7200
+
+  retry:
+    max_attempts: 3
+    min_delay_seconds: 1.0
+    max_delay_seconds: 5.0
+
+  parallel:
+    max_workers: 10  # Thread pool size (1 = serial)
+
+  output:
+    judge_results_json: output/judge_results.json
+    analysis_report: output/evaluation_report.md
 ```
 
-This variable should be placed in the `.env` file in the project root directory.
+### Local Configuration Override
+
+Create `local.config.yml` to override settings without modifying the versioned `config.yml`.
+
+## Evaluation System
+
+The project includes a comprehensive evaluation pipeline to assess AI-generated node quality.
+
+### Running Evaluation
+
+```bash
+# Run full evaluation pipeline
+uv run python cli.py --evaluate
+
+# Use custom config files
+uv run python cli.py --evaluate --config custom.yml --local-config local.yml
+```
+
+### Evaluation Workflow
+
+The evaluation system runs 6 phases:
+
+1. **Phase 1**: Dataset Builder - Samples nodes from DSL files
+2. **Phase 2**: User Message Generator - Infers user intent (parallel execution)
+3. **Phase 3**: Node Generator - Generates nodes using AI (parallel execution)
+4. **Phase 4**: Workflow Validator - Validates generated nodes
+5. **Phase 5**: LLM Judge - Evaluates node quality (parallel execution)
+6. **Phase 6**: Analyzer - Generates report and statistics
+
+### Performance Configuration
+
+**Parallel Execution** (Phases 2, 3, 5):
+
+The evaluation system uses thread pool for parallel API calls, controlled by:
+
+```yaml
+evaluation:
+  parallel:
+    max_workers: 10  # Thread pool max workers
+```
+
+### Output Files
+
+After evaluation completes, results are saved to the files you configured in `config.yml` or `local.config.yml`
+Output directories are created automatically if they don't exist.
