@@ -6,7 +6,8 @@ Analyzes evaluation results and generates report.
 from datetime import datetime
 from typing import List, Dict
 from ..models import (
-    Phase5Dataset, Phase5Sample, EvaluationResults, SingleSampleResult,
+    Phase5Dataset, Phase5Sample,
+    EvaluationResults, SingleSampleResult,
     OverallStats, ScoreDistribution, NodeTypeScore, ConfigSummary
 )
 from ai_workflow_action.config_loader import ConfigLoader
@@ -21,34 +22,43 @@ class Analyzer:
 
     def analyze(self, phase5_data: Phase5Dataset) -> EvaluationResults:
         """
-        Analyze evaluation results.
+        Analyze evaluation results (includes ALL samples from Phase5).
 
         Args:
-            phase5_data: Phase 5 dataset
+            phase5_data: Phase 5 dataset (contains all samples, including failed ones)
 
         Returns:
             Evaluation results
         """
         global_config = ConfigLoader.get_config()
 
-        # Convert to simplified results
+        # Convert all Phase5 samples to results
         sample_results: List[SingleSampleResult] = []
+        successful_samples: List[Phase5Sample] = []
+
         for p5_sample in phase5_data.samples:
             sample_results.append(SingleSampleResult(
                 sample_id=p5_sample.sample_id,
-                node_type=p5_sample.node_type,
                 source_file=p5_sample.source_file,
+                removed_node_id=p5_sample.masked_workflow.removed_node_id,
+                node_type=p5_sample.node_type,
+                after_node_id=p5_sample.after_node_id,
                 user_message=p5_sample.user_message,
+                errors=p5_sample.errors,
                 final_score=p5_sample.final_score,
-                variable_analysis=p5_sample.variable_analysis,
-                structure_analysis=p5_sample.structure_analysis,
+                variable_analysis=p5_sample.variable_analysis if p5_sample.final_score > 0 else None,
+                structure_analysis=p5_sample.structure_analysis if p5_sample.final_score > 0 else None,
                 semantic_quality=p5_sample.semantic_quality,
                 config_reasonableness=p5_sample.config_reasonableness,
                 summary=p5_sample.judge_summary
             ))
 
-        # Compute statistics
-        overall_stats = self._compute_stats(phase5_data.samples)
+            # Track successful samples for statistics
+            if p5_sample.final_score > 0 and p5_sample.validation_success:
+                successful_samples.append(p5_sample)
+
+        # Compute statistics (only from successfully evaluated samples)
+        overall_stats = self._compute_stats(successful_samples) if successful_samples else self._empty_stats()
 
         # Create config summary
         config_summary = ConfigSummary(
@@ -66,7 +76,7 @@ class Analyzer:
         return EvaluationResults(
             config_summary=config_summary,
             total_samples=total_samples,
-            evaluated_samples=len(sample_results),
+            evaluated_samples=len(successful_samples),
             sample_results=sample_results,
             overall_stats=overall_stats
         )
@@ -114,6 +124,16 @@ class Analyzer:
 
         with open(self.config.analysis_report, 'w', encoding='utf-8') as f:
             f.write(report)
+
+    def _empty_stats(self) -> OverallStats:
+        """Return empty stats when no samples were evaluated"""
+        return OverallStats(
+            avg_score=0.0,
+            avg_jaccard=0.0,
+            score_distribution=ScoreDistribution(),
+            node_type_scores=[],
+            low_score_count=0
+        )
 
     def _compute_stats(self, samples: List[Phase5Sample]) -> OverallStats:
         """Compute overall statistics"""

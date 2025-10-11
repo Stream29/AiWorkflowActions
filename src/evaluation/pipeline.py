@@ -73,7 +73,7 @@ class EvaluationPipeline:
         generator = NodeGenerator()
         dataset = generator.generate(phase2_output)
 
-        success_count = sum(1 for s in dataset.samples if not s.generation_error)
+        success_count = sum(1 for s in dataset.samples if not s.errors)
         print(f"  ✓ Generated {success_count}/{len(dataset.samples)} nodes")
         return dataset
 

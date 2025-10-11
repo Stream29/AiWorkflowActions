@@ -39,19 +39,19 @@ class NodeGenerator:
         }
 
         # Collect results as they complete
-        results: List[Tuple[int, Phase2Sample, NodeData, str, str]] = []
+        results: List[Tuple[int, Phase2Sample, NodeData, str]] = []
         for future in as_completed(futures):
             i, sample = futures[future]
-            actual_output, generated_id, error = future.result()
-            results.append((i, sample, actual_output, generated_id, error))
+            actual_output, generated_id = future.result()
+            results.append((i, sample, actual_output, generated_id))
 
-            status = "✓" if not error else f"✗ ({error[:30]})"
+            status = "✓" if generated_id else "✗"
             print(f"  [{len(results)}/{len(phase2_data.samples)}] Sample {sample.sample_id} {status}")
 
         # Sort by original order
         results.sort(key=lambda x: x[0])
 
-        # Create Phase3 samples
+        # Create Phase3 samples (errors already in sample.errors)
         phase3_samples = [
             Phase3Sample(
                 sample_id=sample.sample_id,
@@ -62,21 +62,21 @@ class NodeGenerator:
                 app_name=sample.app_name,
                 app_description=sample.app_description,
                 user_message=sample.user_message,
+                errors=sample.errors,
                 actual_output=actual_output,
-                generated_node_id=generated_id,
-                generation_error=error
+                generated_node_id=generated_id
             )
-            for _, sample, actual_output, generated_id, error in results
+            for _, sample, actual_output, generated_id in results
         ]
 
         return Phase3Dataset(samples=phase3_samples, metadata=phase2_data.metadata)
 
-    def _generate_with_retry(self, p2_sample: Phase2Sample) -> tuple[NodeData, str, str]:
+    def _generate_with_retry(self, p2_sample: Phase2Sample) -> tuple[NodeData, str]:
         """
         Generate node with retry mechanism.
 
         Returns:
-            Tuple of (actual_output, generated_node_id, error_message)
+            Tuple of (actual_output, generated_node_id)
         """
         for attempt in range(self.retry_config.max_attempts):
             try:
@@ -99,7 +99,7 @@ class NodeGenerator:
                 if not generated_node:
                     raise ValueError(f"Generated node {new_node_id} not found")
 
-                return (generated_node.data, new_node_id, "")
+                return (generated_node.data, new_node_id)
 
             except Exception as e:
                 if attempt < self.retry_config.max_attempts - 1:
@@ -111,11 +111,15 @@ class NodeGenerator:
                     print(f"     Error: {type(e).__name__}: {str(e)}")
                     time.sleep(delay)
                 else:
-                    # Last attempt failed - print full traceback and return placeholder
+                    # Last attempt failed - capture error and return placeholder
                     print(f"\n  ✗ All {self.retry_config.max_attempts} attempts failed for sample {p2_sample.sample_id}")
                     print("=" * 80)
                     traceback.print_exc()
                     print("=" * 80)
+
+                    # Capture full error with stacktrace
+                    error_msg = f"[Phase 3] {type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+                    p2_sample.errors.append(error_msg)
 
                     from dsl_model.nodes import NoteNodeData
                     empty_data: NodeData = NoteNodeData(
@@ -123,15 +127,7 @@ class NodeGenerator:
                         theme="yellow",
                         text=f"Failed to generate {p2_sample.node_type} node"
                     )
-                    # Get full error message with traceback
-                    error_msg = f"{type(e).__name__}: {str(e)}"
-                    return (empty_data, "", error_msg)
+                    return (empty_data, "")
 
         # This should never be reached, but add for type checker
-        from dsl_model.nodes import NoteNodeData
-        empty_data_final: NodeData = NoteNodeData(
-            title="Generation Failed",
-            theme="yellow",
-            text="Max retries exceeded"
-        )
-        return (empty_data_final, "", "Max retries exceeded")
+        raise RuntimeError("Max retries exceeded")

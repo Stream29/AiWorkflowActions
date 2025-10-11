@@ -3,7 +3,7 @@ Data models for the evaluation system.
 Strict typing with proper generic types from typing module.
 """
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from dsl_model import DifyWorkflowDSL, NodeData
 
@@ -52,6 +52,7 @@ class Phase1Sample(BaseModel):
     after_node_id: str
     app_name: str
     app_description: str
+    errors: List[str] = Field(default_factory=list, description="Error messages with stacktrace from all phases")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -89,7 +90,6 @@ class Phase3Sample(Phase2Sample):
     """Phase 3 sample data (adds generated output)"""
     actual_output: NodeData
     generated_node_id: str
-    generation_error: str = Field(default="")
 
 
 class Phase3Dataset(BaseModel):
@@ -107,7 +107,6 @@ class Phase3Dataset(BaseModel):
 class Phase4Sample(Phase3Sample):
     """Phase 4 sample data (adds validation result)"""
     validation_success: bool
-    validation_error: str = Field(default="")
 
 
 class Phase4Dataset(BaseModel):
@@ -145,7 +144,7 @@ class Phase5Sample(Phase4Sample):
     structure_analysis: StructureAnalysis
     semantic_quality: str
     config_reasonableness: str
-    final_score: float = Field(ge=1.0, le=7.0)
+    final_score: float
     judge_summary: str
 
 
@@ -164,15 +163,18 @@ class Phase5Dataset(BaseModel):
 class SingleSampleResult(BaseModel):
     """Single sample evaluation result (simplified for output)"""
     sample_id: int
-    node_type: str
     source_file: str
+    removed_node_id: str
+    node_type: str
+    after_node_id: str
     user_message: str
-    final_score: float
-    variable_analysis: VariableAnalysis
-    structure_analysis: StructureAnalysis
-    semantic_quality: str
-    config_reasonableness: str
-    summary: str
+    errors: List[str] = Field(default_factory=list, description="All errors from all phases with stacktrace")
+    final_score: float = Field(default=0.0)
+    variable_analysis: Optional[VariableAnalysis] = Field(default=None)
+    structure_analysis: Optional[StructureAnalysis] = Field(default=None)
+    semantic_quality: str = Field(default="")
+    config_reasonableness: str = Field(default="")
+    summary: str = Field(default="")
 
 
 class ScoreDistribution(BaseModel):

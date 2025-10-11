@@ -7,7 +7,7 @@ import time
 import random
 import json
 import traceback
-from typing import TypedDict, List, Dict, Any, Tuple
+from typing import TypedDict, List, Dict, Any, Tuple, Optional
 from concurrent.futures import as_completed
 from anthropic import Anthropic
 from ai_workflow_action.parallel_service import ParallelService
@@ -41,77 +41,132 @@ class LLMJudge:
     def evaluate(self, phase4_data: Phase4Dataset) -> Phase5Dataset:
         """
         Evaluate samples using LLM Judge.
+        Keeps ALL samples (even failed ones) in output.
 
         Args:
             phase4_data: Phase 4 dataset
 
         Returns:
-            Phase 5 dataset with evaluation results
+            Phase 5 dataset with evaluation results (all samples included)
         """
-        # Filter valid samples
-        valid_samples = [s for s in phase4_data.samples if s.validation_success]
+        # Separate valid and invalid samples
+        valid_samples = [(i, s) for i, s in enumerate(phase4_data.samples) if s.validation_success]
+        invalid_samples = [(i, s) for i, s in enumerate(phase4_data.samples) if not s.validation_success]
 
-        if not valid_samples:
-            return Phase5Dataset(samples=[], metadata=phase4_data.metadata)
-
-        # Submit all tasks to thread pool
+        # Submit only valid samples to thread pool
         futures = {
-            ParallelService.submit(self._evaluate_with_retry, sample): (i, sample)
-            for i, sample in enumerate(valid_samples)
+            ParallelService.submit(self._evaluate_with_retry_safe, sample): (i, sample)
+            for i, sample in valid_samples
         }
 
         # Collect results as they complete
-        results: List[Tuple[int, Phase4Sample, JudgeResultDict]] = []
+        eval_results: List[Tuple[int, Phase4Sample, Optional[JudgeResultDict]]] = []
+
         for future in as_completed(futures):
             i, sample = futures[future]
             result = future.result()
-            results.append((i, sample, result))
-            print(f"  [{len(results)}/{len(valid_samples)}] Sample {sample.sample_id} ✓ ({result['final_score']:.1f})")
+            eval_results.append((i, sample, result))
+
+            if result:
+                print(f"  [{len(eval_results)}/{len(valid_samples)}] Sample {sample.sample_id} ✓ ({result['final_score']:.1f})")
+            else:
+                print(f"  [{len(eval_results)}/{len(valid_samples)}] Sample {sample.sample_id} ✗")
+
+        # Add invalid samples (skipped evaluation)
+        for i, sample in invalid_samples:
+            eval_results.append((i, sample, None))
 
         # Sort by original order
-        results.sort(key=lambda x: x[0])
+        eval_results.sort(key=lambda x: x[0])
 
-        # Create Phase5 samples
+        # Create Phase5 samples for ALL samples
         phase5_samples = []
-        for _, p4_sample, result in results:
-            var_analysis_data = result["variable_analysis"]
-            struct_analysis_data = result["structure_analysis"]
+        for _, p4_sample, result in eval_results:
+            if result:
+                # Successfully evaluated
+                var_analysis_data = result["variable_analysis"]
+                struct_analysis_data = result["structure_analysis"]
 
-            phase5_sample = Phase5Sample(
-                sample_id=p4_sample.sample_id,
-                source_file=p4_sample.source_file,
-                masked_workflow=p4_sample.masked_workflow,
-                node_type=p4_sample.node_type,
-                after_node_id=p4_sample.after_node_id,
-                app_name=p4_sample.app_name,
-                app_description=p4_sample.app_description,
-                user_message=p4_sample.user_message,
-                actual_output=p4_sample.actual_output,
-                generated_node_id=p4_sample.generated_node_id,
-                generation_error=p4_sample.generation_error,
-                validation_success=p4_sample.validation_success,
-                validation_error=p4_sample.validation_error,
-                variable_analysis=VariableAnalysis(
-                    expected_variables=var_analysis_data["expected_variables"],
-                    actual_variables=var_analysis_data["actual_variables"],
-                    jaccard_similarity=var_analysis_data["jaccard_similarity"],
-                    missing_variables=var_analysis_data["missing_variables"],
-                    extra_variables=var_analysis_data["extra_variables"]
-                ),
-                structure_analysis=StructureAnalysis(
-                    required_fields_present=struct_analysis_data["required_fields_present"],
-                    total_required_fields=struct_analysis_data["total_required_fields"],
-                    completeness_ratio=struct_analysis_data["completeness_ratio"],
-                    missing_fields=struct_analysis_data["missing_fields"]
-                ),
-                semantic_quality=str(result["semantic_quality"]),
-                config_reasonableness=str(result["config_reasonableness"]),
-                final_score=float(result["final_score"]),
-                judge_summary=str(result["summary"])
-            )
+                phase5_sample = Phase5Sample(
+                    sample_id=p4_sample.sample_id,
+                    source_file=p4_sample.source_file,
+                    masked_workflow=p4_sample.masked_workflow,
+                    node_type=p4_sample.node_type,
+                    after_node_id=p4_sample.after_node_id,
+                    app_name=p4_sample.app_name,
+                    app_description=p4_sample.app_description,
+                    user_message=p4_sample.user_message,
+                    errors=p4_sample.errors,
+                    actual_output=p4_sample.actual_output,
+                    generated_node_id=p4_sample.generated_node_id,
+                    validation_success=p4_sample.validation_success,
+                    variable_analysis=VariableAnalysis(
+                        expected_variables=var_analysis_data["expected_variables"],
+                        actual_variables=var_analysis_data["actual_variables"],
+                        jaccard_similarity=var_analysis_data["jaccard_similarity"],
+                        missing_variables=var_analysis_data["missing_variables"],
+                        extra_variables=var_analysis_data["extra_variables"]
+                    ),
+                    structure_analysis=StructureAnalysis(
+                        required_fields_present=struct_analysis_data["required_fields_present"],
+                        total_required_fields=struct_analysis_data["total_required_fields"],
+                        completeness_ratio=struct_analysis_data["completeness_ratio"],
+                        missing_fields=struct_analysis_data["missing_fields"]
+                    ),
+                    semantic_quality=str(result["semantic_quality"]),
+                    config_reasonableness=str(result["config_reasonableness"]),
+                    final_score=float(result["final_score"]),
+                    judge_summary=str(result["summary"])
+                )
+            else:
+                # Failed sample - create placeholder Phase5Sample
+                summary_msg = "Skipped due to previous errors" if p4_sample.errors else "Validation failed"
+                phase5_sample = Phase5Sample(
+                    sample_id=p4_sample.sample_id,
+                    source_file=p4_sample.source_file,
+                    masked_workflow=p4_sample.masked_workflow,
+                    node_type=p4_sample.node_type,
+                    after_node_id=p4_sample.after_node_id,
+                    app_name=p4_sample.app_name,
+                    app_description=p4_sample.app_description,
+                    user_message=p4_sample.user_message,
+                    errors=p4_sample.errors,
+                    actual_output=p4_sample.actual_output,
+                    generated_node_id=p4_sample.generated_node_id,
+                    validation_success=p4_sample.validation_success,
+                    variable_analysis=VariableAnalysis(
+                        expected_variables=[],
+                        actual_variables=[],
+                        jaccard_similarity=0.0,
+                        missing_variables=[],
+                        extra_variables=[]
+                    ),
+                    structure_analysis=StructureAnalysis(
+                        required_fields_present=0,
+                        total_required_fields=0,
+                        completeness_ratio=0.0,
+                        missing_fields=[]
+                    ),
+                    semantic_quality="",
+                    config_reasonableness="",
+                    final_score=0.0,
+                    judge_summary=summary_msg
+                )
+
             phase5_samples.append(phase5_sample)
 
         return Phase5Dataset(samples=phase5_samples, metadata=phase4_data.metadata)
+
+    def _evaluate_with_retry_safe(self, p4_sample: Phase4Sample) -> Optional[JudgeResultDict]:
+        """Safe wrapper that catches all exceptions and returns None on failure"""
+        try:
+            return self._evaluate_with_retry(p4_sample)
+        except Exception as e:
+            # Capture full error with stacktrace
+            error_msg = f"[Phase 5] {type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+            p4_sample.errors.append(error_msg)
+            # Return None to indicate failure
+            return None
 
     def _evaluate_with_retry(self, p4_sample: Phase4Sample) -> JudgeResultDict:
         """Evaluate with retry mechanism"""

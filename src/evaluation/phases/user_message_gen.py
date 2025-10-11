@@ -38,7 +38,7 @@ class UserMessageGenerator:
         """
         # Submit all tasks to thread pool
         futures = {
-            ParallelService.submit(self._generate_with_retry, sample): (i, sample)
+            ParallelService.submit(self._generate_with_retry_safe, sample): (i, sample)
             for i, sample in enumerate(phase1_data.samples)
         }
 
@@ -48,12 +48,13 @@ class UserMessageGenerator:
             i, sample = futures[future]
             user_message = future.result()
             results.append((i, sample, user_message))
-            print(f"  [{len(results)}/{len(phase1_data.samples)}] Sample {sample.sample_id} ✓")
+            status = "✓" if user_message else "✗"
+            print(f"  [{len(results)}/{len(phase1_data.samples)}] Sample {sample.sample_id} {status}")
 
         # Sort by original order
         results.sort(key=lambda x: x[0])
 
-        # Create Phase2 samples
+        # Create Phase2 samples (keep all samples, even if user_message is empty)
         phase2_samples = [
             Phase2Sample(
                 sample_id=sample.sample_id,
@@ -63,12 +64,23 @@ class UserMessageGenerator:
                 after_node_id=sample.after_node_id,
                 app_name=sample.app_name,
                 app_description=sample.app_description,
-                user_message=user_message
+                user_message=user_message or "[GENERATION FAILED]"
             )
             for _, sample, user_message in results
         ]
 
         return Phase2Dataset(samples=phase2_samples, metadata=phase1_data.metadata)
+
+    def _generate_with_retry_safe(self, p1_sample: Phase1Sample) -> str:
+        """Safe wrapper that catches all exceptions and returns empty string on failure"""
+        try:
+            return self._generate_with_retry(p1_sample)
+        except Exception as e:
+            # Capture full error with stacktrace
+            error_msg = f"[Phase 2] {type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+            p1_sample.errors.append(error_msg)
+            # Return placeholder
+            return "[GENERATION FAILED]"
 
     def _generate_with_retry(self, p1_sample: Phase1Sample) -> str:
         """Generate with retry mechanism"""

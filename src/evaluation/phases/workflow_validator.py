@@ -27,8 +27,9 @@ class WorkflowValidator:
         phase4_samples: List[Phase4Sample] = []
 
         for p3_sample in phase3_data.samples:
-            if p3_sample.generation_error:
-                # Generation failed, skip validation
+            # Skip validation if there were errors in previous phases
+            if p3_sample.errors:
+                # Previous phase failed, skip validation
                 phase4_sample = Phase4Sample(
                     sample_id=p3_sample.sample_id,
                     source_file=p3_sample.source_file,
@@ -38,11 +39,10 @@ class WorkflowValidator:
                     app_name=p3_sample.app_name,
                     app_description=p3_sample.app_description,
                     user_message=p3_sample.user_message,
+                    errors=p3_sample.errors,
                     actual_output=p3_sample.actual_output,
                     generated_node_id=p3_sample.generated_node_id,
-                    generation_error=p3_sample.generation_error,
-                    validation_success=False,
-                    validation_error="Generation failed"
+                    validation_success=False
                 )
                 phase4_samples.append(phase4_sample)
                 continue
@@ -72,22 +72,22 @@ class WorkflowValidator:
                     app_name=p3_sample.app_name,
                     app_description=p3_sample.app_description,
                     user_message=p3_sample.user_message,
+                    errors=p3_sample.errors,
                     actual_output=p3_sample.actual_output,
                     generated_node_id=p3_sample.generated_node_id,
-                    generation_error=p3_sample.generation_error,
-                    validation_success=True,
-                    validation_error=""
+                    validation_success=True
                 )
 
             except Exception as e:
-                # Validation failed - print full traceback
+                # Validation failed - print full traceback and append error
                 print(f"\n  ✗ Validation failed for sample {p3_sample.sample_id}")
                 print("=" * 80)
                 traceback.print_exc()
                 print("=" * 80)
 
-                # Get detailed error message
-                error_msg = f"{type(e).__name__}: {str(e)}"
+                # Capture full error with stacktrace
+                error_msg = f"[Phase 4] {type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+                p3_sample.errors.append(error_msg)
 
                 phase4_sample = Phase4Sample(
                     sample_id=p3_sample.sample_id,
@@ -98,11 +98,10 @@ class WorkflowValidator:
                     app_name=p3_sample.app_name,
                     app_description=p3_sample.app_description,
                     user_message=p3_sample.user_message,
+                    errors=p3_sample.errors,
                     actual_output=p3_sample.actual_output,
                     generated_node_id=p3_sample.generated_node_id,
-                    generation_error=p3_sample.generation_error,
-                    validation_success=False,
-                    validation_error=error_msg
+                    validation_success=False
                 )
 
             phase4_samples.append(phase4_sample)
