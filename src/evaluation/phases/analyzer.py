@@ -52,8 +52,8 @@ class Analyzer:
 
         # Create config summary
         config_summary = ConfigSummary(
-            generation_model=global_config.models.generation,
-            inference_model=global_config.models.inference,
+            generation_model=global_config.models.node_generation,
+            inference_model=global_config.models.user_intent_inference,
             judge_model=global_config.models.judge,
             total_samples_target=global_config.evaluation.dataset.total_samples
         )

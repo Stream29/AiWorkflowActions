@@ -22,7 +22,7 @@ class AiWorkflowAction:
 
         # Initialize AI resources (RAII pattern for API client)
         self.client = Anthropic(api_key=config.api.anthropic_api_key)
-        self.model = config.models.generation
+        self.model = config.models.node_generation
 
         # Initialize workflow components
         self.dsl_file = dsl_file

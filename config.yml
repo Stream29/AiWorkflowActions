@@ -3,17 +3,15 @@
 
 # Global API Configuration
 api:
-  anthropic_api_key: ${ANTHROPIC_API_KEY}
+  anthropic_api_key: <no_api_key>
 
 # Global Model Configuration
 models:
-  generation: claude-sonnet-4-20250514       # Node generation model
-  inference: claude-sonnet-4-5-20250929      # User intent inference model
-  judge: claude-3-5-sonnet-20250122          # Judge evaluation model
+  node_generation: claude-sonnet-4-5-20250929       # Node generation model
+  user_intent_inference: claude-sonnet-4-5-20250929 # User intent inference model
+  judge: claude-sonnet-4-5-20250929                 # Judge evaluation model
 
-# Evaluation System Configuration
 evaluation:
-  # Dataset sampling
   dataset:
     source_dsl_dir: resources/Awesome-Dify-Workflow/DSL
     total_samples: 90
@@ -24,26 +22,18 @@ evaluation:
       - iteration-start
       - loop-start
       - loop-end
-
-  # User Message Inference
   user_message_inference:
     prompt_template: src/evaluation/prompts/user_message_inference.txt
-    temperature: 0.7
+    temperature: 0.0
     max_tokens: 200
-
-  # Judge Evaluation
   judge:
     prompt_template: src/evaluation/prompts/llm_judge_eval.txt
     temperature: 0.0
-    max_tokens: 4000
-
-  # Retry Configuration
+    max_tokens: 64000
   retry:
-    max_attempts: 3               # Maximum 3 retry attempts
-    min_delay_seconds: 1.0        # Minimum random delay
-    max_delay_seconds: 5.0        # Maximum random delay
-
-  # Output
+    max_attempts: 3
+    min_delay_seconds: 1.0
+    max_delay_seconds: 5.0
   output:
-    judge_results_json: judge_results.json
-    analysis_report: evaluation_report.md
+    judge_results_json: output/judge_results.json
+    analysis_report: output/evaluation_report.md

@@ -18,7 +18,7 @@ class UserMessageGenerator:
 
     def __init__(self):
         config = ConfigLoader.get_config()
-        self.model = config.models.inference
+        self.model = config.models.user_intent_inference
         self.config = config.evaluation.user_message_inference
         self.retry_config = config.evaluation.retry
         self.client = Anthropic(api_key=config.api.anthropic_api_key)

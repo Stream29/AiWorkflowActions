@@ -17,8 +17,8 @@ class APIConfig(BaseModel):
 
 class ModelsConfig(BaseModel):
     """Global models configuration"""
-    generation: str = Field(description="Node generation model")
-    inference: str = Field(description="User message inference model")
+    node_generation: str = Field(description="Node generation model")
+    user_intent_inference: str = Field(description="User intent inference model")
     judge: str = Field(description="Judge evaluation model")
 
 
