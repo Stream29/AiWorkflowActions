@@ -36,7 +36,7 @@ evaluation:
     min_delay_seconds: 1.0
     max_delay_seconds: 5.0
   parallel:
-    max_workers: 10                 # Thread pool max workers (1 = serial)
+    max_workers: 40                 # Thread pool max workers (1 = serial)
   output:
     judge_results_json: output/judge_results.json
     analysis_report: output/evaluation_report.md
