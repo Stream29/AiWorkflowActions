@@ -5,6 +5,7 @@ Generates nodes using AiWorkflowAction API (reuses existing code).
 
 import time
 import random
+import traceback
 from typing import List
 from ai_workflow_action import DifyWorkflowDslFile, AiWorkflowAction
 from dsl_model import NodeType, NodeData
@@ -95,16 +96,25 @@ class NodeGenerator:
                         self.retry_config.min_delay_seconds,
                         self.retry_config.max_delay_seconds
                     )
+                    print(f"\n  ⚠ Attempt {attempt + 1} failed, retrying in {delay:.1f}s...")
+                    print(f"     Error: {type(e).__name__}: {str(e)}")
                     time.sleep(delay)
                 else:
-                    # Last attempt failed - return a NoteNodeData as placeholder
+                    # Last attempt failed - print full traceback and return placeholder
+                    print(f"\n  ✗ All {self.retry_config.max_attempts} attempts failed for sample {p2_sample.sample_id}")
+                    print("=" * 80)
+                    traceback.print_exc()
+                    print("=" * 80)
+
                     from dsl_model.nodes import NoteNodeData
                     empty_data: NodeData = NoteNodeData(
                         title="Generation Failed",
                         theme="yellow",
                         text=f"Failed to generate {p2_sample.node_type} node"
                     )
-                    return (empty_data, "", str(e))
+                    # Get full error message with traceback
+                    error_msg = f"{type(e).__name__}: {str(e)}"
+                    return (empty_data, "", error_msg)
 
         # This should never be reached, but add for type checker
         from dsl_model.nodes import NoteNodeData

@@ -3,6 +3,7 @@ import cmd
 import json
 import shlex
 import sys
+import traceback
 from pathlib import Path
 from typing import Optional, List
 
@@ -87,7 +88,10 @@ class CLI(cmd.Cmd):
         except yaml.YAMLError as e:
             print(f"✗ Invalid YAML format: {e}")
         except Exception as e:
-            print(f"✗ Failed to load: {e}")
+            print(f"✗ Failed to load: {type(e).__name__}: {e}")
+            print("=" * 80)
+            traceback.print_exc()
+            print("=" * 80)
 
     def do_save(self, args: str):
         """Save the workflow
@@ -112,7 +116,10 @@ class CLI(cmd.Cmd):
             self.ai_action.dsl_file.save(parsed_args.file_path)
             print(f"✓ Saved: {parsed_args.file_path}")
         except Exception as e:
-            print(f"✗ Failed to save: {e}")
+            print(f"✗ Failed to save: {type(e).__name__}: {e}")
+            print("=" * 80)
+            traceback.print_exc()
+            print("=" * 80)
 
     def do_nodes(self, args: str):
         """List all nodes
@@ -185,7 +192,10 @@ class CLI(cmd.Cmd):
             json_str = json.dumps(data_dict, indent=2, ensure_ascii=False)
             print(json_str)
         except Exception as e:
-            print(f"✗ Failed to get node details: {e}")
+            print(f"✗ Failed to get node details: {type(e).__name__}: {e}")
+            print("=" * 80)
+            traceback.print_exc()
+            print("=" * 80)
 
     def do_generate(self, args: str):
         """Generate and add a new node using AI
@@ -223,7 +233,10 @@ class CLI(cmd.Cmd):
             )
             print(f"✓ Added node: {node_id}")
         except Exception as e:
-            print(f"✗ Generation failed: {e}")
+            print(f"✗ Generation failed: {type(e).__name__}: {e}")
+            print("=" * 80)
+            traceback.print_exc()
+            print("=" * 80)
 
     def do_remove(self, args: str):
         """Remove nodes from the workflow
@@ -319,7 +332,10 @@ class CLI(cmd.Cmd):
                     print(f"✗ Failed to remove node: {e}")
 
         except Exception as e:
-            print(f"✗ Remove operation failed: {e}")
+            print(f"✗ Remove operation failed: {type(e).__name__}: {e}")
+            print("=" * 80)
+            traceback.print_exc()
+            print("=" * 80)
 
     def do_quit(self, args: str):
         """Quit the CLI"""
@@ -437,7 +453,10 @@ def main():
         print(f"  Please create {args.config} in the project root")
         sys.exit(1)
     except Exception as e:
-        print(f"✗ Failed to load config: {e}")
+        print(f"✗ Failed to load config: {type(e).__name__}: {e}")
+        print("=" * 80)
+        traceback.print_exc()
+        print("=" * 80)
         sys.exit(1)
 
     # Evaluation mode
@@ -458,9 +477,10 @@ def main():
             print(f"  Low score count: {results.overall_stats.low_score_count}")
 
         except Exception as e:
-            print(f"\n✗ Evaluation failed: {e}")
-            import traceback
+            print(f"\n✗ Evaluation failed: {type(e).__name__}: {e}")
+            print("=" * 80)
             traceback.print_exc()
+            print("=" * 80)
             sys.exit(1)
         return
 

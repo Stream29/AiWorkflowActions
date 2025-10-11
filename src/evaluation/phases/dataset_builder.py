@@ -5,6 +5,7 @@ Samples nodes from DSL files and creates masked workflows in memory.
 
 import random
 import copy
+import traceback
 from pathlib import Path
 from typing import List, Tuple, Dict
 
@@ -17,9 +18,10 @@ from ai_workflow_action.config_loader import ConfigLoader
 class DatasetBuilder:
     """Dataset builder for evaluation system"""
 
-    def __init__(self):
+    def __init__(self, verbose: bool = False):
         config = ConfigLoader.get_config()
         self.config = config.evaluation.dataset
+        self.verbose = verbose
 
     def build_dataset(self) -> Phase1Dataset:
         """
@@ -35,14 +37,22 @@ class DatasetBuilder:
 
         # Collect candidate nodes
         candidates: List[Tuple[str, DifyWorkflowDslFile, Node]] = []
+        failed_files = 0
         for dsl_file in dsl_files:
             try:
                 workflow = DifyWorkflowDslFile(str(dsl_file))
                 for node in workflow.dsl.workflow.graph.nodes:
                     if self._is_removable(node, workflow):
                         candidates.append((str(dsl_file), workflow, node))
-            except Exception:
+            except Exception as e:
+                failed_files += 1
+                if self.verbose:
+                    print(f"\n  ⚠ Failed to load {dsl_file}")
+                    print(f"     Error: {type(e).__name__}: {str(e)}")
                 continue
+
+        if failed_files > 0:
+            print(f"  ⚠ Skipped {failed_files} files due to errors")
 
         print(f"  Found {len(candidates)} removable nodes")
 
@@ -80,8 +90,12 @@ class DatasetBuilder:
         if node.data.type in self.config.excluded_node_types:
             return False
 
-        # Exclude nodes immediately after start
+        # Exclude nodes with no predecessors (cannot determine insertion position)
         connections = workflow.get_node_connections(node.id)
+        if not connections.incoming:
+            return False
+
+        # Exclude nodes immediately after start
         for pred_id in connections.incoming:
             pred_node = workflow.get_node(pred_id)
             if pred_node and pred_node.data.type == "start":
@@ -146,5 +160,5 @@ class DatasetBuilder:
             node_type=node.data.type,
             after_node_id=after_node_id,
             app_name=workflow.dsl.app.name,
-            app_description=workflow.dsl.app.description or ""
+            app_description=workflow.dsl.app.description
         )

@@ -6,6 +6,7 @@ Infers user intent from removed node configuration using AI.
 import time
 import random
 import json
+import traceback
 from typing import List
 from anthropic import Anthropic
 from ai_workflow_action import DifyWorkflowDslFile, DifyWorkflowContextBuilder
@@ -77,8 +78,14 @@ class UserMessageGenerator:
                         self.retry_config.min_delay_seconds,
                         self.retry_config.max_delay_seconds
                     )
+                    print(f"\n  ⚠ Attempt {attempt + 1} failed, retrying in {delay:.1f}s...")
+                    print(f"     Error: {type(e).__name__}: {str(e)}")
                     time.sleep(delay)
                 else:
+                    print(f"\n  ✗ All {self.retry_config.max_attempts} attempts failed")
+                    print("=" * 80)
+                    traceback.print_exc()
+                    print("=" * 80)
                     raise e
 
         # This should never be reached, but add for type checker

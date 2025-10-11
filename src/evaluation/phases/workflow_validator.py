@@ -3,6 +3,7 @@ Phase 4: Workflow Validator
 Validates that generated nodes can be inserted into workflows.
 """
 
+import traceback
 from typing import List
 from ai_workflow_action import DifyWorkflowDslFile
 from ai_workflow_action.node_type_util import NodeTypeUtil
@@ -79,7 +80,15 @@ class WorkflowValidator:
                 )
 
             except Exception as e:
-                # Validation failed
+                # Validation failed - print full traceback
+                print(f"\n  ✗ Validation failed for sample {p3_sample.sample_id}")
+                print("=" * 80)
+                traceback.print_exc()
+                print("=" * 80)
+
+                # Get detailed error message
+                error_msg = f"{type(e).__name__}: {str(e)}"
+
                 phase4_sample = Phase4Sample(
                     sample_id=p3_sample.sample_id,
                     source_file=p3_sample.source_file,
@@ -93,7 +102,7 @@ class WorkflowValidator:
                     generated_node_id=p3_sample.generated_node_id,
                     generation_error=p3_sample.generation_error,
                     validation_success=False,
-                    validation_error=str(e)
+                    validation_error=error_msg
                 )
 
             phase4_samples.append(phase4_sample)

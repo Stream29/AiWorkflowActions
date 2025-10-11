@@ -6,6 +6,7 @@ Evaluates generated nodes using LLM Judge with structured output.
 import time
 import random
 import json
+import traceback
 from typing import TypedDict, List, Dict, Any
 from anthropic import Anthropic
 from ..models import (
@@ -118,8 +119,14 @@ class LLMJudge:
                         self.retry_config.min_delay_seconds,
                         self.retry_config.max_delay_seconds
                     )
+                    print(f"\n  ⚠ Attempt {attempt + 1} failed, retrying in {delay:.1f}s...")
+                    print(f"     Error: {type(e).__name__}: {str(e)}")
                     time.sleep(delay)
                 else:
+                    print(f"\n  ✗ All {self.retry_config.max_attempts} attempts failed for sample {p4_sample.sample_id}")
+                    print("=" * 80)
+                    traceback.print_exc()
+                    print("=" * 80)
                     raise e
 
         # This should never be reached, but add for type checker
