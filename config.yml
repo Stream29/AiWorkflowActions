@@ -22,6 +22,7 @@ evaluation:
       - iteration-start
       - loop-start
       - loop-end
+      - ""
   user_message_inference:
     prompt_template: src/evaluation/prompts/user_message_inference.txt
     temperature: 0.0
