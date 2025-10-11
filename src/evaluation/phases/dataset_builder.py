@@ -18,7 +18,7 @@ from ai_workflow_action.config_loader import ConfigLoader
 class DatasetBuilder:
     """Dataset builder for evaluation system"""
 
-    def __init__(self, verbose: bool = False):
+    def __init__(self, verbose: bool = True):
         config = ConfigLoader.get_config()
         self.config = config.evaluation.dataset
         self.verbose = verbose
