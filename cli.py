@@ -1,28 +1,24 @@
 import argparse
 import cmd
 import json
-import os
 import shlex
 import sys
 from pathlib import Path
 from typing import Optional, List
 
 import yaml
-from dotenv import load_dotenv
 from pydantic import ValidationError
 
 from ai_workflow_action import (
     AiWorkflowAction, DifyWorkflowDslFile,
     DSLValidationReport, DifyWorkflowContextBuilder
 )
+from ai_workflow_action.config_loader import ConfigLoader, GlobalConfig
 from dsl_model import NodeType
 from dsl_model.dsl import DifyWorkflowDSL
 
-# Load environment variables from project root
+# Project root
 project_root = Path(__file__).resolve().parent
-env_path = project_root / '.env'
-if env_path.exists():
-    load_dotenv(env_path)
 
 
 class CLI(cmd.Cmd):
@@ -75,13 +71,8 @@ class CLI(cmd.Cmd):
             if not Path(file_path).exists():
                 print(f"✗ File not found: {file_path}")
                 return
-            api_key = os.getenv("ANTHROPIC_API_KEY")
-            if not api_key:
-                print("✗ ANTHROPIC_API_KEY not found in environment variables")
-                print("  This tool requires an Anthropic API key to function")
-                return
             dsl_file = DifyWorkflowDslFile(file_path)
-            self.ai_action = AiWorkflowAction(api_key=api_key, dsl_file=dsl_file)
+            self.ai_action = AiWorkflowAction(dsl_file=dsl_file)
             self.current_file = file_path
             self._update_prompt()
             info = self.ai_action.dsl_file.get_workflow_info()
@@ -432,24 +423,29 @@ def main():
     parser.add_argument('--evaluate', action='store_true',
                         help='Run evaluation pipeline')
     parser.add_argument('--config', default='config.yml',
-                        help='Config file for evaluation (default: config.yml)')
+                        help='Config file (default: config.yml)')
     parser.add_argument('--local-config', default='local.config.yml',
                         help='Local config file (default: local.config.yml)')
 
     args = parser.parse_args()
-    cli = CLI()
+
+    # Load global configuration
+    try:
+        config = ConfigLoader.load(args.config, args.local_config)
+    except FileNotFoundError as e:
+        print(f"✗ Config file not found: {e}")
+        print(f"  Please create {args.config} in the project root")
+        sys.exit(1)
+    except Exception as e:
+        print(f"✗ Failed to load config: {e}")
+        sys.exit(1)
 
     # Evaluation mode
     if args.evaluate:
         try:
-            from ai_workflow_action.config_loader import ConfigLoader
             from src.evaluation.pipeline import EvaluationPipeline
 
-            print(f"Loading config from {args.config}...")
-            config = ConfigLoader.load(args.config, args.local_config)
-            print("✓ Config loaded\n")
-
-            pipeline = EvaluationPipeline(config)
+            pipeline = EvaluationPipeline()
             results = pipeline.run()
 
             print(f"\nResults:")
@@ -467,6 +463,9 @@ def main():
             traceback.print_exc()
             sys.exit(1)
         return
+
+    # Create CLI instance
+    cli = CLI()
 
     # Validation mode
     if args.validate_resources:

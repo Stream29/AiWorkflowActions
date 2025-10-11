@@ -9,16 +9,15 @@ from typing import List
 from ai_workflow_action import DifyWorkflowDslFile, AiWorkflowAction
 from dsl_model import NodeType, NodeData
 from ..models import Phase2Dataset, Phase2Sample, Phase3Dataset, Phase3Sample
-from ai_workflow_action.config_loader import RetryConfig
+from ai_workflow_action.config_loader import ConfigLoader
 
 
 class NodeGenerator:
     """Node generator with retry mechanism (reuses AiWorkflowAction API)"""
 
-    def __init__(self, api_key: str, model: str, retry_config: RetryConfig):
-        self.api_key = api_key
-        self.model = model
-        self.retry_config = retry_config
+    def __init__(self):
+        config = ConfigLoader.get_config()
+        self.retry_config = config.evaluation.retry
 
     def generate(self, phase2_data: Phase2Dataset) -> Phase3Dataset:
         """
@@ -75,11 +74,7 @@ class NodeGenerator:
                 temp_wf.file_path = None
 
                 # Call existing API (automatically handles prompt building, etc.)
-                ai_action = AiWorkflowAction(
-                    api_key=self.api_key,
-                    dsl_file=temp_wf,
-                    model=self.model
-                )
+                ai_action = AiWorkflowAction(dsl_file=temp_wf)
 
                 new_node_id = ai_action.generate_node(
                     after_node_id=p2_sample.after_node_id,

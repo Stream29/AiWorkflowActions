@@ -7,25 +7,21 @@ import time
 import random
 import json
 from typing import List
+from anthropic import Anthropic
 from ai_workflow_action import DifyWorkflowDslFile, DifyWorkflowContextBuilder
 from ..models import Phase1Dataset, Phase1Sample, Phase2Dataset, Phase2Sample
-from ai_workflow_action.config_loader import UserMessageInferenceConfig, RetryConfig
-from ai_workflow_action.client import AnthropicClientManager
+from ai_workflow_action.config_loader import ConfigLoader
 
 
 class UserMessageGenerator:
     """User message generator with retry mechanism"""
 
-    def __init__(
-        self,
-        model: str,
-        config: UserMessageInferenceConfig,
-        retry_config: RetryConfig
-    ):
-        self.model = model
-        self.config = config
-        self.retry_config = retry_config
-        self.client = AnthropicClientManager.get_client()
+    def __init__(self):
+        config = ConfigLoader.get_config()
+        self.model = config.models.inference
+        self.config = config.evaluation.user_message_inference
+        self.retry_config = config.evaluation.retry
+        self.client = Anthropic(api_key=config.api.anthropic_api_key)
 
     def generate(self, phase1_data: Phase1Dataset) -> Phase2Dataset:
         """

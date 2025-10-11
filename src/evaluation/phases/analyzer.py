@@ -9,26 +9,28 @@ from ..models import (
     Phase5Dataset, Phase5Sample, EvaluationResults, SingleSampleResult,
     OverallStats, ScoreDistribution, NodeTypeScore, ConfigSummary
 )
-from ai_workflow_action.config_loader import OutputConfig, GlobalConfig
+from ai_workflow_action.config_loader import ConfigLoader
 
 
 class Analyzer:
     """Analyzer for evaluation results"""
 
-    def __init__(self, config: OutputConfig):
-        self.config = config
+    def __init__(self):
+        config = ConfigLoader.get_config()
+        self.config = config.evaluation.output
 
-    def analyze(self, phase5_data: Phase5Dataset, global_config: GlobalConfig) -> EvaluationResults:
+    def analyze(self, phase5_data: Phase5Dataset) -> EvaluationResults:
         """
         Analyze evaluation results.
 
         Args:
             phase5_data: Phase 5 dataset
-            global_config: Global configuration
 
         Returns:
             Evaluation results
         """
+        global_config = ConfigLoader.get_config()
+
         # Convert to simplified results
         sample_results: List[SingleSampleResult] = []
         for p5_sample in phase5_data.samples:

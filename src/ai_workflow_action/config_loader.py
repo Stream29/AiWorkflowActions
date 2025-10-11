@@ -5,7 +5,7 @@ Supports YAML config with local overrides and environment variable substitution.
 
 import os
 from pathlib import Path
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Optional
 import yaml
 from pydantic import BaseModel, Field
 
@@ -76,8 +76,26 @@ class GlobalConfig(BaseModel):
 class ConfigLoader:
     """Configuration loader with support for local overrides and env vars"""
 
-    @staticmethod
+    _global_config: Optional[GlobalConfig] = None
+
+    @classmethod
+    def get_config(cls) -> GlobalConfig:
+        """
+        Get global configuration instance.
+
+        Returns:
+            GlobalConfig object
+
+        Raises:
+            RuntimeError: If config has not been loaded yet
+        """
+        if cls._global_config is None:
+            raise RuntimeError("Configuration not loaded. Call ConfigLoader.load() first.")
+        return cls._global_config
+
+    @classmethod
     def load(
+        cls,
         config_file: str = "config.yml",
         local_config_file: str = "local.config.yml"
     ) -> GlobalConfig:
@@ -104,11 +122,13 @@ class ConfigLoader:
 
         # Resolve environment variables
         if config_data:
-            config_data = ConfigLoader._resolve_env_vars(config_data)
+            config_data = cls._resolve_env_vars(config_data)
         else:
             raise ValueError("Config data is None")
 
-        return GlobalConfig.model_validate(config_data)
+        # Store as global config
+        cls._global_config = GlobalConfig.model_validate(config_data)
+        return cls._global_config
 
     @staticmethod
     def _deep_merge(base: Any, override: Any) -> Any:

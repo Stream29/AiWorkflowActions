@@ -1,31 +1,28 @@
 from typing import Type, Optional
 
+from anthropic import Anthropic
 from dsl_model import NodeType, BaseNodeData
 from .context_builder import DifyWorkflowContextBuilder
 from .dsl_file import DifyWorkflowDslFile
 from .models import WorkflowContext, NodeInfo
 from .node_type_util import NodeTypeUtil
-from .client import AnthropicClientManager
+from .config_loader import ConfigLoader
 
 
 class AiWorkflowAction:
-    def __init__(
-            self,
-            api_key: str,
-            dsl_file: DifyWorkflowDslFile,
-            model: str = "claude-sonnet-4-20250514"
-    ):
+    def __init__(self, dsl_file: DifyWorkflowDslFile):
         """
         Initialize AI workflow action
 
         Args:
-            api_key: Anthropic API key
-            dsl_file: Optional workflow file to work with
-            model: Claude model to use for generation
+            dsl_file: Workflow file to work with
         """
+        # Get configuration from global singleton
+        config = ConfigLoader.get_config()
+
         # Initialize AI resources (RAII pattern for API client)
-        self.client = AnthropicClientManager.get_client(api_key)
-        self.model = model
+        self.client = Anthropic(api_key=config.api.anthropic_api_key)
+        self.model = config.models.generation
 
         # Initialize workflow components
         self.dsl_file = dsl_file

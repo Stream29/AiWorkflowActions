@@ -7,12 +7,12 @@ import time
 import random
 import json
 from typing import TypedDict, List, Dict, Any
+from anthropic import Anthropic
 from ..models import (
     Phase4Dataset, Phase4Sample, Phase5Dataset, Phase5Sample,
     VariableAnalysis, StructureAnalysis
 )
-from ai_workflow_action.config_loader import JudgeConfig, RetryConfig
-from ai_workflow_action.client import AnthropicClientManager
+from ai_workflow_action.config_loader import ConfigLoader
 
 
 class JudgeResultDict(TypedDict):
@@ -28,11 +28,12 @@ class JudgeResultDict(TypedDict):
 class LLMJudge:
     """LLM Judge evaluator with retry mechanism"""
 
-    def __init__(self, model: str, config: JudgeConfig, retry_config: RetryConfig):
-        self.model = model
-        self.config = config
-        self.retry_config = retry_config
-        self.client = AnthropicClientManager.get_client()
+    def __init__(self):
+        config = ConfigLoader.get_config()
+        self.model = config.models.judge
+        self.config = config.evaluation.judge
+        self.retry_config = config.evaluation.retry
+        self.client = Anthropic(api_key=config.api.anthropic_api_key)
 
     def evaluate(self, phase4_data: Phase4Dataset) -> Phase5Dataset:
         """

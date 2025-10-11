@@ -7,14 +7,11 @@ from .models import (
     Phase1Dataset, Phase2Dataset, Phase3Dataset,
     Phase4Dataset, Phase5Dataset, EvaluationResults
 )
-from ai_workflow_action.config_loader import GlobalConfig
+from ai_workflow_action.config_loader import ConfigLoader
 
 
 class EvaluationPipeline:
     """Evaluation pipeline (6 phases, in-memory execution)"""
-
-    def __init__(self, config: GlobalConfig):
-        self.config = config
 
     def run(self) -> EvaluationResults:
         """
@@ -51,7 +48,7 @@ class EvaluationPipeline:
         print("[Phase 1/6] Building dataset...")
         from .phases.dataset_builder import DatasetBuilder
 
-        builder = DatasetBuilder(self.config.evaluation.dataset)
+        builder = DatasetBuilder()
         dataset = builder.build_dataset()
 
         print(f"  ✓ Sampled {len(dataset.samples)} nodes")
@@ -62,11 +59,7 @@ class EvaluationPipeline:
         print("\n[Phase 2/6] Inferring user messages...")
         from .phases.user_message_gen import UserMessageGenerator
 
-        generator = UserMessageGenerator(
-            self.config.models.inference,
-            self.config.evaluation.user_message_inference,
-            self.config.evaluation.retry
-        )
+        generator = UserMessageGenerator()
         dataset = generator.generate(phase1_output)
 
         print(f"  ✓ Generated {len(dataset.samples)} messages")
@@ -77,11 +70,7 @@ class EvaluationPipeline:
         print("\n[Phase 3/6] Generating nodes (using AiWorkflowAction API)...")
         from .phases.node_generator import NodeGenerator
 
-        generator = NodeGenerator(
-            self.config.api.anthropic_api_key,
-            self.config.models.generation,
-            self.config.evaluation.retry
-        )
+        generator = NodeGenerator()
         dataset = generator.generate(phase2_output)
 
         success_count = sum(1 for s in dataset.samples if not s.generation_error)
@@ -105,11 +94,7 @@ class EvaluationPipeline:
         print("\n[Phase 5/6] Evaluating with LLM Judge...")
         from .phases.llm_judge import LLMJudge
 
-        judge = LLMJudge(
-            self.config.models.judge,
-            self.config.evaluation.judge,
-            self.config.evaluation.retry
-        )
+        judge = LLMJudge()
         dataset = judge.evaluate(phase4_output)
 
         avg_score = sum(s.final_score for s in dataset.samples) / len(dataset.samples)
@@ -121,14 +106,15 @@ class EvaluationPipeline:
         print("\n[Phase 6/6] Analyzing and generating report...")
         from .phases.analyzer import Analyzer
 
-        analyzer = Analyzer(self.config.evaluation.output)
-        results = analyzer.analyze(phase5_output, self.config)
+        config = ConfigLoader.get_config()
+        analyzer = Analyzer()
+        results = analyzer.analyze(phase5_output)
 
         # Save outputs
-        results.save_json(self.config.evaluation.output.judge_results_json)
+        results.save_json(config.evaluation.output.judge_results_json)
         analyzer.generate_report(results)
 
-        print(f"  ✓ Saved: {self.config.evaluation.output.judge_results_json}")
-        print(f"  ✓ Saved: {self.config.evaluation.output.analysis_report}")
+        print(f"  ✓ Saved: {config.evaluation.output.judge_results_json}")
+        print(f"  ✓ Saved: {config.evaluation.output.analysis_report}")
 
         return results

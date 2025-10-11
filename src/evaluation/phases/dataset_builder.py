@@ -11,14 +11,15 @@ from typing import List, Tuple, Dict
 from dsl_model import Node
 from ai_workflow_action import DifyWorkflowDslFile
 from ..models import Phase1Sample, Phase1Dataset, MaskedWorkflow, DatasetMetadata, NodeTypeDistribution
-from ai_workflow_action.config_loader import DatasetConfig
+from ai_workflow_action.config_loader import ConfigLoader
 
 
 class DatasetBuilder:
     """Dataset builder for evaluation system"""
 
-    def __init__(self, config: DatasetConfig):
-        self.config = config
+    def __init__(self):
+        config = ConfigLoader.get_config()
+        self.config = config.evaluation.dataset
 
     def build_dataset(self) -> Phase1Dataset:
         """
