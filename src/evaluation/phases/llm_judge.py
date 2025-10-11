@@ -7,8 +7,10 @@ import time
 import random
 import json
 import traceback
-from typing import TypedDict, List, Dict, Any
+from typing import TypedDict, List, Dict, Any, Tuple
+from concurrent.futures import as_completed
 from anthropic import Anthropic
+from ai_workflow_action.parallel_service import ParallelService
 from ..models import (
     Phase4Dataset, Phase4Sample, Phase5Dataset, Phase5Sample,
     VariableAnalysis, StructureAnalysis
@@ -46,17 +48,32 @@ class LLMJudge:
         Returns:
             Phase 5 dataset with evaluation results
         """
-        phase5_samples: List[Phase5Sample] = []
+        # Filter valid samples
+        valid_samples = [s for s in phase4_data.samples if s.validation_success]
 
-        for i, p4_sample in enumerate(phase4_data.samples):
-            if not p4_sample.validation_success:
-                print(f"  [{i+1}/{len(phase4_data.samples)}] Skip sample {p4_sample.sample_id}")
-                continue
+        if not valid_samples:
+            return Phase5Dataset(samples=[], metadata=phase4_data.metadata)
 
-            print(f"  [{i+1}/{len(phase4_data.samples)}] Sample {p4_sample.sample_id}...", end=" ")
+        # Submit all tasks to thread pool
+        futures = {
+            ParallelService.submit(self._evaluate_with_retry, sample): (i, sample)
+            for i, sample in enumerate(valid_samples)
+        }
 
-            result = self._evaluate_with_retry(p4_sample)
+        # Collect results as they complete
+        results: List[Tuple[int, Phase4Sample, JudgeResultDict]] = []
+        for future in as_completed(futures):
+            i, sample = futures[future]
+            result = future.result()
+            results.append((i, sample, result))
+            print(f"  [{len(results)}/{len(valid_samples)}] Sample {sample.sample_id} ✓ ({result['final_score']:.1f})")
 
+        # Sort by original order
+        results.sort(key=lambda x: x[0])
+
+        # Create Phase5 samples
+        phase5_samples = []
+        for _, p4_sample, result in results:
             var_analysis_data = result["variable_analysis"]
             struct_analysis_data = result["structure_analysis"]
 
@@ -93,8 +110,6 @@ class LLMJudge:
                 judge_summary=str(result["summary"])
             )
             phase5_samples.append(phase5_sample)
-
-            print(f"✓ ({result['final_score']:.1f})")
 
         return Phase5Dataset(samples=phase5_samples, metadata=phase4_data.metadata)
 

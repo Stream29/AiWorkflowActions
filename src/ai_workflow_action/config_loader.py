@@ -51,6 +51,11 @@ class RetryConfig(BaseModel):
     max_delay_seconds: float = Field(ge=0.0)
 
 
+class ParallelConfig(BaseModel):
+    """Parallel execution configuration"""
+    max_workers: int = Field(default=10, ge=1, le=50, description="Thread pool max workers")
+
+
 class OutputConfig(BaseModel):
     """Output configuration"""
     judge_results_json: str
@@ -63,6 +68,7 @@ class EvaluationConfig(BaseModel):
     user_message_inference: UserMessageInferenceConfig
     judge: JudgeConfig
     retry: RetryConfig
+    parallel: ParallelConfig
     output: OutputConfig
 
 

@@ -30,11 +30,13 @@ evaluation:
   judge:
     prompt_template: src/evaluation/prompts/llm_judge_eval.txt
     temperature: 0.0
-    max_tokens: 64000
+    max_tokens: 7200
   retry:
     max_attempts: 3
     min_delay_seconds: 1.0
     max_delay_seconds: 5.0
+  parallel:
+    max_workers: 10                 # Thread pool max workers (1 = serial)
   output:
     judge_results_json: output/judge_results.json
     analysis_report: output/evaluation_report.md

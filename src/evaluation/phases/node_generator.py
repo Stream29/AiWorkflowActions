@@ -6,8 +6,10 @@ Generates nodes using AiWorkflowAction API (reuses existing code).
 import time
 import random
 import traceback
-from typing import List
+from typing import List, Tuple
+from concurrent.futures import as_completed
 from ai_workflow_action import DifyWorkflowDslFile, AiWorkflowAction
+from ai_workflow_action.parallel_service import ParallelService
 from dsl_model import NodeType, NodeData
 from ..models import Phase2Dataset, Phase2Sample, Phase3Dataset, Phase3Sample
 from ai_workflow_action.config_loader import ConfigLoader
@@ -30,33 +32,42 @@ class NodeGenerator:
         Returns:
             Phase 3 dataset with actual_output populated
         """
-        phase3_samples: List[Phase3Sample] = []
+        # Submit all tasks to thread pool
+        futures = {
+            ParallelService.submit(self._generate_with_retry, sample): (i, sample)
+            for i, sample in enumerate(phase2_data.samples)
+        }
 
-        for i, p2_sample in enumerate(phase2_data.samples):
-            print(f"  [{i+1}/{len(phase2_data.samples)}] Sample {p2_sample.sample_id}...", end=" ")
+        # Collect results as they complete
+        results: List[Tuple[int, Phase2Sample, NodeData, str, str]] = []
+        for future in as_completed(futures):
+            i, sample = futures[future]
+            actual_output, generated_id, error = future.result()
+            results.append((i, sample, actual_output, generated_id, error))
 
-            # Generate with retry
-            actual_output, generated_id, error = self._generate_with_retry(p2_sample)
+            status = "✓" if not error else f"✗ ({error[:30]})"
+            print(f"  [{len(results)}/{len(phase2_data.samples)}] Sample {sample.sample_id} {status}")
 
-            phase3_sample = Phase3Sample(
-                sample_id=p2_sample.sample_id,
-                source_file=p2_sample.source_file,
-                masked_workflow=p2_sample.masked_workflow,
-                node_type=p2_sample.node_type,
-                after_node_id=p2_sample.after_node_id,
-                app_name=p2_sample.app_name,
-                app_description=p2_sample.app_description,
-                user_message=p2_sample.user_message,
+        # Sort by original order
+        results.sort(key=lambda x: x[0])
+
+        # Create Phase3 samples
+        phase3_samples = [
+            Phase3Sample(
+                sample_id=sample.sample_id,
+                source_file=sample.source_file,
+                masked_workflow=sample.masked_workflow,
+                node_type=sample.node_type,
+                after_node_id=sample.after_node_id,
+                app_name=sample.app_name,
+                app_description=sample.app_description,
+                user_message=sample.user_message,
                 actual_output=actual_output,
                 generated_node_id=generated_id,
                 generation_error=error
             )
-            phase3_samples.append(phase3_sample)
-
-            if error:
-                print(f"✗ ({error[:30]})")
-            else:
-                print("✓")
+            for _, sample, actual_output, generated_id, error in results
+        ]
 
         return Phase3Dataset(samples=phase3_samples, metadata=phase2_data.metadata)
 

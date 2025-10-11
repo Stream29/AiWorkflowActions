@@ -8,8 +8,10 @@ import random
 import json
 import traceback
 from typing import List
+from concurrent.futures import as_completed
 from anthropic import Anthropic
 from ai_workflow_action import DifyWorkflowDslFile, DifyWorkflowContextBuilder
+from ai_workflow_action.parallel_service import ParallelService
 from ..models import Phase1Dataset, Phase1Sample, Phase2Dataset, Phase2Sample
 from ai_workflow_action.config_loader import ConfigLoader
 
@@ -34,26 +36,37 @@ class UserMessageGenerator:
         Returns:
             Phase 2 dataset with user_message field populated
         """
-        phase2_samples: List[Phase2Sample] = []
+        # Submit all tasks to thread pool
+        futures = {
+            ParallelService.submit(self._generate_with_retry, sample): (i, sample)
+            for i, sample in enumerate(phase1_data.samples)
+        }
 
-        for i, p1_sample in enumerate(phase1_data.samples):
-            print(f"  [{i+1}/{len(phase1_data.samples)}] Sample {p1_sample.sample_id}...", end=" ")
+        # Collect results as they complete
+        results: List[tuple[int, Phase1Sample, str]] = []
+        for future in as_completed(futures):
+            i, sample = futures[future]
+            user_message = future.result()
+            results.append((i, sample, user_message))
+            print(f"  [{len(results)}/{len(phase1_data.samples)}] Sample {sample.sample_id} ✓")
 
-            user_message = self._generate_with_retry(p1_sample)
+        # Sort by original order
+        results.sort(key=lambda x: x[0])
 
-            phase2_sample = Phase2Sample(
-                sample_id=p1_sample.sample_id,
-                source_file=p1_sample.source_file,
-                masked_workflow=p1_sample.masked_workflow,
-                node_type=p1_sample.node_type,
-                after_node_id=p1_sample.after_node_id,
-                app_name=p1_sample.app_name,
-                app_description=p1_sample.app_description,
+        # Create Phase2 samples
+        phase2_samples = [
+            Phase2Sample(
+                sample_id=sample.sample_id,
+                source_file=sample.source_file,
+                masked_workflow=sample.masked_workflow,
+                node_type=sample.node_type,
+                after_node_id=sample.after_node_id,
+                app_name=sample.app_name,
+                app_description=sample.app_description,
                 user_message=user_message
             )
-            phase2_samples.append(phase2_sample)
-
-            print("✓")
+            for _, sample, user_message in results
+        ]
 
         return Phase2Dataset(samples=phase2_samples, metadata=phase1_data.metadata)
 
