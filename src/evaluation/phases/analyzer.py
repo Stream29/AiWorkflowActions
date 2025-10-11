@@ -108,6 +108,10 @@ class Analyzer:
         for node_type_score in sorted(stats.node_type_scores, key=lambda x: x.avg_score):
             report += f"| {node_type_score.node_type} | {node_type_score.avg_score:.2f} | {node_type_score.sample_count} |\n"
 
+        # Create parent directory if it doesn't exist
+        from pathlib import Path
+        Path(self.config.analysis_report).parent.mkdir(parents=True, exist_ok=True)
+
         with open(self.config.analysis_report, 'w', encoding='utf-8') as f:
             f.write(report)
 

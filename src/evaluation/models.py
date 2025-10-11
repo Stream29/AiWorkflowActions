@@ -222,6 +222,11 @@ class EvaluationResults(BaseModel):
     def save_json(self, file_path: str) -> None:
         """Save to JSON file"""
         import json
+        from pathlib import Path
+
+        # Create parent directory if it doesn't exist
+        Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(self.model_dump(by_alias=True), f, indent=2, ensure_ascii=False)
 
