@@ -1,12 +1,11 @@
 from typing import Type, Optional
 
-from anthropic import Anthropic
-
 from dsl_model import NodeType, BaseNodeData
 from .context_builder import DifyWorkflowContextBuilder
 from .dsl_file import DifyWorkflowDslFile
 from .models import WorkflowContext, NodeInfo
 from .node_type_util import NodeTypeUtil
+from .client import AnthropicClientManager
 
 
 class AiWorkflowAction:
@@ -18,14 +17,14 @@ class AiWorkflowAction:
     ):
         """
         Initialize AI workflow action
-        
+
         Args:
             api_key: Anthropic API key
             dsl_file: Optional workflow file to work with
             model: Claude model to use for generation
         """
         # Initialize AI resources (RAII pattern for API client)
-        self.client = Anthropic(api_key=api_key)
+        self.client = AnthropicClientManager.get_client(api_key)
         self.model = model
 
         # Initialize workflow components

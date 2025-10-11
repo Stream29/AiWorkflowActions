@@ -1,0 +1,34 @@
+You are analyzing a Dify workflow where a node was removed. Your task is to infer what the user's original request might have been that led to creating this node.
+
+## Workflow Context
+App Name: {app_name}
+Description: {app_description}
+
+## Current Workflow (after node removal)
+{workflow_summary}
+
+## Removed Node Information
+Type: {node_type}
+Title: {node_title}
+
+Key Configuration:
+{key_config}
+
+## Insertion Position
+The node was inserted after: {after_node_id}
+
+## Task
+Based on the workflow context and the removed node's configuration, write a concise, natural user message (1-2 sentences) that would lead to generating this specific node.
+
+The message should:
+- Be casual and natural (like a real user request)
+- Reflect the node's specific purpose based on its configuration
+- Be action-oriented (what the user wants to accomplish)
+- Be concise (1-2 sentences max)
+
+Good examples:
+- "Check if the email ends with a personal email domain (gmail.com, outlook.com, etc.)"
+- "Help me extract an array[string] from the output"
+- "Add the value of nextSearchTopic to the topics array, forming a list of search topics"
+
+Return ONLY the user message text, nothing else. Do not include quotes or explanations.

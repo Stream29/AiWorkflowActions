@@ -125,3 +125,8 @@ ehthumbs.db
 Thumbs.db
 
 .claude
+
+# Evaluation System
+local.config.yml
+judge_results.json
+evaluation_report.md

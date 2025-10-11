@@ -429,13 +429,54 @@ def main():
     parser.add_argument('file', nargs='?', help='Workflow file to load')
     parser.add_argument('--validate-resources', action='store_true',
                         help='Validate all DSL files in resources and write report if any errors')
+    parser.add_argument('--evaluate', action='store_true',
+                        help='Run evaluation pipeline')
+    parser.add_argument('--config', default='config.yml',
+                        help='Config file for evaluation (default: config.yml)')
+    parser.add_argument('--local-config', default='local.config.yml',
+                        help='Local config file (default: local.config.yml)')
+
     args = parser.parse_args()
     cli = CLI()
+
+    # Evaluation mode
+    if args.evaluate:
+        try:
+            from ai_workflow_action.config_loader import ConfigLoader
+            from src.evaluation.pipeline import EvaluationPipeline
+
+            print(f"Loading config from {args.config}...")
+            config = ConfigLoader.load(args.config, args.local_config)
+            print("✓ Config loaded\n")
+
+            pipeline = EvaluationPipeline(config)
+            results = pipeline.run()
+
+            print(f"\nResults:")
+            print(f"  - {config.evaluation.output.judge_results_json}")
+            print(f"  - {config.evaluation.output.analysis_report}")
+            print(f"\nSummary:")
+            print(f"  Total samples: {results.total_samples}")
+            print(f"  Evaluated samples: {results.evaluated_samples}")
+            print(f"  Avg score: {results.overall_stats.avg_score:.2f} / 7.0")
+            print(f"  Low score count: {results.overall_stats.low_score_count}")
+
+        except Exception as e:
+            print(f"\n✗ Evaluation failed: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+        return
+
+    # Validation mode
     if args.validate_resources:
         cli.do_validate_resources('')
         return
+
+    # Load file mode
     if args.file:
         cli.do_load(f'"{args.file}"')  # Use quotes to handle paths with spaces
+
     # Enter interactive mode
     cli.cmdloop()
 

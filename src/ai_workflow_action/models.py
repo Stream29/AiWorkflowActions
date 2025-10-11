@@ -3,7 +3,7 @@ Pydantic models for workflow operations and CLI responses.
 Strong typing to replace Dict[str, Any] usage throughout the codebase.
 """
 
-from typing import List, Optional, Dict
+from typing import Optional, List, Dict
 
 from pydantic import BaseModel, Field
 

@@ -1,0 +1,18 @@
+# Local Configuration File Example
+# Copy to local.config.yml and modify
+
+# Override global model configuration
+models:
+  generation: claude-opus-4-20250514  # Use more powerful model
+
+# Override evaluation system configuration
+evaluation:
+  dataset:
+    source_dsl_dir: /custom/path/to/dsl
+    total_samples: 50
+
+  user_message_inference:
+    prompt_template: /custom/prompts/my_inference.txt
+
+  judge:
+    prompt_template: /custom/prompts/my_judge.txt

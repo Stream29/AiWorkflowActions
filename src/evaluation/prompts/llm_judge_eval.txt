@@ -1,0 +1,212 @@
+You are an expert reviewer of Dify workflow node configurations. Your task is to compare the AI-generated node configuration (actual_output) against the original ground truth standard (expected_output) and rate the quality score between 1.0 and 7.0.
+
+---
+
+## Evaluation Criteria
+
+Evaluate actual_output based on the following weighted criteria:
+
+### 1. Variable Reference Correctness (Weight: 40%) ⭐ MOST CRITICAL
+
+**Why Critical**: Dify workflows use `{{#node_id.field#}}` syntax to reference variables. Incorrect variable references will cause the entire workflow to fail.
+
+**What to Check**:
+- Extract all variables matching the `{{#[^#]+#}}` pattern
+- Compare the variable sets between expected and actual
+- Calculate Jaccard similarity: |intersection| / |union|
+- Identify:
+  - **Missing variables**: Present in expected but not in actual
+  - **Extra variables**: Present in actual but not in expected
+  - **Fabricated variables**: Variables that are unreasonable/non-existent in context
+
+**Metrics to Report**:
+```json
+{
+  "expected_variables": ["{{#node1.output#}}", "{{#node2.text#}}"],
+  "actual_variables": ["{{#node1.output#}}", "{{#node3.result#}}"],
+  "jaccard_similarity": 0.67,
+  "missing_variables": ["{{#node2.text#}}"],
+  "extra_variables": ["{{#node3.result#}}"]
+}
+```
+
+**Scoring Reference**:
+- Jaccard ≥ 0.95: 6.5-7.0 (Excellent)
+- Jaccard 0.80-0.95: 5.5-6.5 (Good)
+- Jaccard 0.60-0.80: 4.0-5.5 (Acceptable)
+- Jaccard 0.30-0.60: 2.5-4.0 (Poor)
+- Jaccard < 0.30: 1.0-2.5 (Very Poor)
+
+---
+
+### 2. Structure Completeness (Weight: 30%)
+
+**What to Check**:
+- For the node type, **does it include required fields**:
+  - LLM node: `model`, `prompt_template`
+  - Code node: `code`, `outputs`
+  - Tool node: `tool_name`, `tool_parameters`
+  - All nodes: `title`, `type`
+
+- **Is nested structure correct**:
+  - Are `model.provider`, `model.name` properly nested
+  - Is `prompt_template` an array of role/text objects
+  - Does `retry_config` contain correct subfields
+
+- **Are data types correct**:
+  - Strings where strings are needed
+  - Objects where objects are needed
+  - Arrays where arrays are needed
+
+**Metrics to Report**:
+```json
+{
+  "required_fields_present": 8,
+  "total_required_fields": 10,
+  "completeness_ratio": 0.8,
+  "missing_fields": ["context.memory", "retry_config"]
+}
+```
+
+---
+
+### 3. Semantic Quality (Weight: 20%)
+
+**What to Check**:
+- **Title**: Is it descriptive and meaningful?
+- **Description**: Is it useful and accurate?
+- **Prompt content** (for LLM nodes):
+  - Are instructions clear?
+  - Does it include appropriate system/user messages?
+  - Is prompt structure logically sound?
+- **Code logic** (for code nodes):
+  - Is implementation reasonable?
+  - Is there appropriate error handling?
+
+**Quality Definitions**:
+- Excellent: Clear, professional, well-structured
+- Good: Functional but could be clearer
+- Acceptable: Basically usable
+- Poor: Unclear or meaningless
+
+---
+
+### 4. Configuration Reasonableness (Weight: 10%)
+
+**What to Check**:
+- **Model selection**: Is it appropriate for the task?
+- **Temperature**: Is the temperature parameter reasonable (0.0-1.0)?
+- **Max tokens**: Is the output length reasonable?
+- **Retry config**: Are retry settings appropriate?
+
+---
+
+## Error Classification
+
+### Critical Errors (Score ≤ 4.0)
+- Fabricated variables (referencing non-existent variables)
+- Missing critical required fields
+- Incorrect node type
+- Invalid JSON structure
+- Error logic that would cause workflow failure
+
+### Minor Errors (Score 4.0-6.0)
+- Missing optional fields
+- Suboptimal variable selection (usable but not ideal)
+- Verbose/unclear descriptions
+- Minor configuration issues
+
+---
+
+## Output Format
+
+Please return a JSON object strictly structured as follows:
+
+```json
+{
+  "variable_analysis": {
+    "expected_variables": [...],
+    "actual_variables": [...],
+    "jaccard_similarity": 0.85,
+    "missing_variables": [...],
+    "extra_variables": []
+  },
+  "structure_analysis": {
+    "required_fields_present": 10,
+    "total_required_fields": 10,
+    "completeness_ratio": 1.0,
+    "missing_fields": []
+  },
+  "semantic_quality": "excellent",
+  "config_reasonableness": "good",
+  "final_score": 6.2,
+  "summary": "The generated node has accurate variable references and complete structure, with only minor room for improvement in descriptions."
+}
+```
+
+---
+
+## Scoring Standards
+
+**6.5 - 7.0 (Excellent)**
+- Variable Jaccard ≥ 0.95
+- All required fields present
+- High semantic quality
+- Production-ready
+- No critical errors
+
+**5.5 - 6.5 (Good)**
+- Jaccard 0.80-0.95
+- Most required fields present
+- Good semantic quality
+- Only minor improvements needed
+- No critical errors
+
+**4.0 - 5.5 (Acceptable)**
+- Jaccard 0.60-0.80
+- Required fields mostly present
+- Functional but needs refinement
+- 0-1 critical errors
+
+**2.5 - 4.0 (Poor)**
+- Jaccard 0.30-0.60
+- Missing some required fields
+- 1-2 critical errors
+- Needs significant adjustments
+
+**1.0 - 2.5 (Very Poor)**
+- Jaccard < 0.30
+- Multiple critical errors
+- Completely unusable
+- 3 or more critical errors
+
+---
+
+## Important Guidelines
+
+1. **Be thorough**: Must actually extract and compare all variables, do not assume.
+
+2. **Variables are most critical**: A node with perfect structure but wrong variables should score lower than a node with slightly imperfect structure but correct variables. Variable errors cause direct workflow failures.
+
+3. **Use the full score range**:
+   - Give 7.0 only to completely flawless work (very rare)
+   - Give 1.0 only to completely unusable work
+   - Distribute scores across the 1.0-7.0 range appropriately
+
+4. **Be specific in descriptions**: Point out specific strengths and weaknesses in the analysis.
+
+5. **Weighted calculation**: Final score roughly follows this formula:
+   ```
+   final_score = (
+       variable_score * 0.4 +
+       structure_score * 0.3 +
+       semantic_score * 0.2 +
+       config_score * 0.1
+   )
+   ```
+
+6. **Summary**: Briefly explain the score reason in 1-2 sentences.
+
+---
+
+Now please evaluate the provided node output and return the JSON object.
